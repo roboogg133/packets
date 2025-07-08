@@ -57,6 +57,8 @@ type Manifest struct {
 	Serial       uint     `json:"serial"`
 }
 
+var Serialpass uint
+
 func main() {
 
 	uid := os.Getuid()
@@ -216,6 +218,54 @@ func main() {
 			return
 		}
 		return
+
+	case "upgrade":
+		if len(os.Args) < 3 {
+			fmt.Println("usage: packets upgrade <realname>")
+			return
+		}
+
+		og_realname := os.Args[2]
+
+		db, err := sql.Open("sqlite", "/opt/packets/packets/index.db")
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		defer db.Close()
+
+		idb, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		defer idb.Close()
+
+		var family string
+		if err := idb.QueryRow("SELECT family FROM packages WHERE realname = ?", og_realname).Scan(&family); err != nil {
+			log.Fatal("line 239", err)
+			return
+		}
+
+		var neo_realname string
+
+		if err := db.QueryRow("SELECT realname FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&neo_realname); err != nil {
+			log.Fatal("line 245", err)
+			return
+		}
+
+		if neo_realname == og_realname {
+			fmt.Printf("%s is up to date!\n", og_realname)
+			return
+		}
+
+		if err := db.QueryRow("SELECT serial FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&Serialpass); err != nil {
+			log.Fatal("line 255", err)
+			return
+		}
+
+		QueryInstall(neo_realname)
+
 	default:
 		fmt.Printf(" %s it's not a command\n", cmd)
 		return
@@ -271,6 +321,7 @@ func Install(packagepath string, serial uint) error {
 	version := manifest.Version
 	dependenc := manifest.Dependencies
 	family := manifest.Family
+
 	fmt.Printf("Installing %s...\n", name)
 
 	var destDir = fmt.Sprintf("/opt/packets/%s", name)
@@ -351,7 +402,7 @@ func Install(packagepath string, serial uint) error {
 	if err != nil {
 		log.Println(err)
 	}
-	defer wManifest.Close()
+	wManifest.Close()
 
 	json_dcoder := json.NewDecoder(wManifest)
 
@@ -361,6 +412,7 @@ func Install(packagepath string, serial uint) error {
 		log.Println(err)
 	}
 
+	wManifestOPen = *manifest
 	wManifestOPen.Serial = serial
 
 	jsonData, err := json.Marshal(wManifestOPen)
@@ -368,9 +420,14 @@ func Install(packagepath string, serial uint) error {
 		log.Println(err)
 	}
 
-	wManifest.Write(jsonData)
+	wManifest.Close()
+
+	os.WriteFile(fmt.Sprintf("%s/manifest.json", destDir), jsonData, 0777)
 
 	script := fmt.Sprintf("%s/postinstall.sh", destDir)
+
+	os.Chmod(script, 0777)
+	os.Chmod(fmt.Sprintf("%s/remove.sh", destDir), 0777)
 
 	fmt.Println("\nMaking post install configuration...")
 	cmd := exec.Command(script)
@@ -379,6 +436,7 @@ func Install(packagepath string, serial uint) error {
 
 	err = cmd.Run()
 	if err != nil {
+		log.Println(err)
 		return fmt.Errorf("error exec postinstall script %e", err)
 	}
 
@@ -393,6 +451,7 @@ func Install(packagepath string, serial uint) error {
 	}
 
 	if err := AddToInstalledDB(insert); err != nil {
+		log.Fatal(err)
 		return err
 	}
 	return nil
@@ -460,7 +519,7 @@ func GetPackageByMirror(mirror string, realname string) error {
 	}
 
 	if os.Args[1] == "upgrade" {
-		if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2]); err != nil {
+		if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], Serialpass); err != nil {
 			return err
 		}
 		return nil
@@ -544,7 +603,7 @@ func QueryInstall(realname string) {
 				return
 			}
 			if os.Args[1] == "upgrade" {
-				if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2]); err != nil {
+				if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], Serialpass); err != nil {
 					log.Fatal(err)
 					return
 				}
@@ -561,6 +620,7 @@ func QueryInstall(realname string) {
 			for _, p := range peers {
 				fmt.Printf("Downloading from %s\n", p.IP)
 				if err := GetPackageByMirror(fmt.Sprintf("http://%s:%d/%s", p.IP, p.Port, filename), realname); err == nil {
+					log.Println(err)
 					break
 				}
 				fmt.Printf("Download failed!\n")
@@ -568,6 +628,7 @@ func QueryInstall(realname string) {
 		}
 		fmt.Printf("Downloading from %s\n", mirrors)
 		if err := GetPackageByMirror(mirrors, realname); err == nil {
+			log.Println(err)
 			return
 		}
 
@@ -587,13 +648,7 @@ func QueryInstall(realname string) {
 					continue
 				} else {
 					if os.Args[1] == "upgrade" {
-						if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2]); err != nil {
-							log.Fatal(err)
-							return
-						}
-					}
-					if os.Args[1] == "upgrade" {
-						if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2]); err != nil {
+						if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], Serialpass); err != nil {
 							log.Fatal(err)
 							return
 						}
@@ -617,6 +672,7 @@ func QueryInstall(realname string) {
 			}
 			fmt.Printf("Downloading from %s\n", v)
 			if err := GetPackageByMirror(v, realname); err == nil {
+				log.Println(err)
 				break
 			}
 
@@ -775,13 +831,13 @@ func AddToInstalledDB(insert Installed) error {
 	}
 	defer db.Close()
 
-	_, err = db.Exec("CREATE TABLE IF NOT EXISTS packages (realname TEXT NOT NULL UNIQUE PRIMARY KEY, version TEXT NOT NULL, dependencies TEXT, name TEXT)")
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS packages (realname TEXT NOT NULL UNIQUE PRIMARY KEY, version TEXT NOT NULL, dependencies TEXT, name TEXT, family TEXT NOT NULL, serial INTEGER)")
 	if err != nil {
 		return err
 	}
 
 	if len(insert.Dependencies) == 0 {
-		_, err = db.Exec("INSERT INTO packages (realname, version) VALUES (?, ?)", insert.Realname, insert.Version)
+		_, err = db.Exec("INSERT INTO packages (realname, version, family, serial) VALUES (?, ?)", insert.Realname, insert.Version, insert.Family, insert.Serial)
 		if err != nil {
 			return err
 		}
@@ -795,7 +851,7 @@ func AddToInstalledDB(insert Installed) error {
 
 	query = query[:len(query)-1]
 
-	_, err = db.Exec("INSERT INTO packages (realname, version, dependencies) VALUES (?, ?, ?)", insert.Realname, insert.Version, query)
+	_, err = db.Exec("INSERT INTO packages (realname, version, dependencies, family, serial) VALUES (?, ?, ?)", insert.Realname, insert.Version, query, insert.Family, insert.Serial)
 	if err != nil {
 		return err
 	}
@@ -896,7 +952,7 @@ func ListPackets() error {
 	return nil
 }
 
-func Upgrade(packagepath string, og_realname string) error {
+func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	db, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
 	if err != nil {
@@ -924,6 +980,7 @@ func Upgrade(packagepath string, og_realname string) error {
 	name := manifest.Name
 	version := manifest.Version
 	dependenc := manifest.Dependencies
+	family := manifest.Family
 
 	fmt.Printf("Upgrading %s to %s...\n", og_realname, name)
 
@@ -1006,6 +1063,9 @@ func Upgrade(packagepath string, og_realname string) error {
 
 	script := fmt.Sprintf("%s/postinstall.sh", destDir)
 
+	os.Chmod(script, 0777)
+	os.Chmod(fmt.Sprintf("%s/remove.sh", destDir), 0777)
+
 	fmt.Println("\nMaking post install configuration...")
 	cmd := exec.Command(script)
 	cmd.Stdout = os.Stdout
@@ -1023,6 +1083,8 @@ func Upgrade(packagepath string, og_realname string) error {
 	insert.Realname = name
 	insert.Version = version
 	insert.Dependencies = dependenc
+	insert.Serial = serial
+	insert.Family = family
 
 	_, err = db.Exec("DELETE FROM packages WHERE realname =  ?", og_realname)
 	if err != nil {
@@ -1046,3 +1108,5 @@ func SearchUpgrades(name string) error {
 
 	return nil
 }
+
+// i will kill myself soon cuz im so dumb, i need to upgrade this code 100x, but with time everything will be good
