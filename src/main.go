@@ -89,6 +89,12 @@ func main() {
 		defer db.Close()
 
 		nameToQuery := os.Args[2]
+		var exist bool
+		db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE realname = ?  LIMIT 1)", nameToQuery).Scan(&exist)
+		if exist {
+			QueryInstall(nameToQuery)
+			return
+		}
 
 		rows, err := db.Query("SELECT realname, version, description FROM packages WHERE name = ?", nameToQuery)
 		if err != nil {
@@ -264,6 +270,7 @@ func main() {
 			return
 		}
 
+		fmt.Println("founded upgrade")
 		QueryInstall(neo_realname)
 
 	default:
@@ -318,9 +325,6 @@ func Install(packagepath string, serial uint) error {
 	}
 
 	name := manifest.Name
-	version := manifest.Version
-	dependenc := manifest.Dependencies
-	family := manifest.Family
 
 	fmt.Printf("Installing %s...\n", name)
 
@@ -398,29 +402,12 @@ func Install(packagepath string, serial uint) error {
 
 	}
 
-	wManifest, err := os.Open(fmt.Sprintf("%s/manifest.json", destDir))
+	manifest.Serial = serial
+
+	jsonData, err := json.Marshal(manifest)
 	if err != nil {
 		log.Println(err)
 	}
-	wManifest.Close()
-
-	json_dcoder := json.NewDecoder(wManifest)
-
-	var wManifestOPen Manifest
-
-	if err := json_dcoder.Decode(&wManifestOPen); err != nil {
-		log.Println(err)
-	}
-
-	wManifestOPen = *manifest
-	wManifestOPen.Serial = serial
-
-	jsonData, err := json.Marshal(wManifestOPen)
-	if err != nil {
-		log.Println(err)
-	}
-
-	wManifest.Close()
 
 	os.WriteFile(fmt.Sprintf("%s/manifest.json", destDir), jsonData, 0777)
 
@@ -429,12 +416,15 @@ func Install(packagepath string, serial uint) error {
 	os.Chmod(script, 0777)
 	os.Chmod(fmt.Sprintf("%s/remove.sh", destDir), 0777)
 
+	fmt.Println("\nExecute ", fmt.Sprintf("%s/postinstall.sh", destDir), "?")
+
 	fmt.Println("\nMaking post install configuration...")
 	cmd := exec.Command(script)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	err = cmd.Run()
+
 	if err != nil {
 		log.Println(err)
 		return fmt.Errorf("error exec postinstall script %e", err)
@@ -443,11 +433,11 @@ func Install(packagepath string, serial uint) error {
 	fmt.Printf("Package %s fully installed you maybe run: \"source ~/.bashrc \"\n", name)
 
 	var insert = Installed{
-		Realname:     name,
-		Version:      version,
-		Dependencies: dependenc,
-		Family:       family,
-		Serial:       serial,
+		Realname:     manifest.Name,
+		Version:      manifest.Version,
+		Dependencies: manifest.Dependencies,
+		Family:       manifest.Family,
+		Serial:       manifest.Serial,
 	}
 
 	if err := AddToInstalledDB(insert); err != nil {
@@ -575,6 +565,21 @@ func QueryInstall(realname string) {
 		log.Fatal("cant find index.db, please use sync first")
 	}
 	defer db.Close()
+
+	simplecheck, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+	if err == nil {
+
+		var exist bool
+		simplecheck.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE realname = ?  LIMIT 1)", realname).Scan(&exist)
+
+		if exist {
+			fmt.Println("Alredy installed!")
+			simplecheck.Close()
+			return
+		}
+
+		simplecheck.Close()
+	}
 
 	var mirrors string
 
@@ -837,7 +842,7 @@ func AddToInstalledDB(insert Installed) error {
 	}
 
 	if len(insert.Dependencies) == 0 {
-		_, err = db.Exec("INSERT INTO packages (realname, version, family, serial) VALUES (?, ?)", insert.Realname, insert.Version, insert.Family, insert.Serial)
+		_, err = db.Exec("INSERT INTO packages (realname, version, family, serial) VALUES (?, ?, ?, ?)", insert.Realname, insert.Version, insert.Family, insert.Serial)
 		if err != nil {
 			return err
 		}
@@ -851,7 +856,7 @@ func AddToInstalledDB(insert Installed) error {
 
 	query = query[:len(query)-1]
 
-	_, err = db.Exec("INSERT INTO packages (realname, version, dependencies, family, serial) VALUES (?, ?, ?)", insert.Realname, insert.Version, query, insert.Family, insert.Serial)
+	_, err = db.Exec("INSERT INTO packages (realname, version, dependencies, family, serial) VALUES (?, ?, ?, ?, ?)", insert.Realname, insert.Version, query, insert.Family, insert.Serial)
 	if err != nil {
 		return err
 	}
@@ -978,9 +983,6 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	}
 
 	name := manifest.Name
-	version := manifest.Version
-	dependenc := manifest.Dependencies
-	family := manifest.Family
 
 	fmt.Printf("Upgrading %s to %s...\n", og_realname, name)
 
@@ -1061,12 +1063,21 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	os.Rename(destDir, fmt.Sprintf("/opt/packets/%s", name))
 	destDir = fmt.Sprintf("/opt/packets/%s", name)
 
+	manifest.Serial = serial
+
+	jsonData, err := json.Marshal(manifest)
+	if err != nil {
+		log.Println(err)
+	}
+
+	os.WriteFile(fmt.Sprintf("%s/manifest.json", destDir), jsonData, 0777)
+
 	script := fmt.Sprintf("%s/postinstall.sh", destDir)
 
 	os.Chmod(script, 0777)
 	os.Chmod(fmt.Sprintf("%s/remove.sh", destDir), 0777)
 
-	fmt.Println("\nMaking post install configuration...")
+	fmt.Println("Making post install configuration...")
 	cmd := exec.Command(script)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -1078,13 +1089,13 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	fmt.Printf("Package %s fully installed you maybe run: \"source ~/.bashrc \"\n", name)
 
-	var insert Installed
-
-	insert.Realname = name
-	insert.Version = version
-	insert.Dependencies = dependenc
-	insert.Serial = serial
-	insert.Family = family
+	var insert = Installed{
+		Realname:     manifest.Name,
+		Version:      manifest.Version,
+		Dependencies: manifest.Dependencies,
+		Family:       manifest.Family,
+		Serial:       manifest.Serial,
+	}
 
 	_, err = db.Exec("DELETE FROM packages WHERE realname =  ?", og_realname)
 	if err != nil {
