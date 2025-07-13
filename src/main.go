@@ -731,7 +731,7 @@ func Validate(filename string, realname string) error {
 	}
 
 	if hashString != hashStringDB {
-		fmt.Println("fatal, index.db or package is corrupted")
+		fmt.Println("tampered package, removing it...\nplease run the command again")
 
 		err := os.Remove(fmt.Sprintf("/var/cache/packets/%s", filename))
 		if err != nil {
@@ -941,18 +941,19 @@ func ListPackets() error {
 	}
 	defer db.Close()
 
-	rows, err := db.Query("SELECT realname FROM packages")
+	rows, err := db.Query("SELECT realname, version FROM packages")
 	if err != nil {
 		return err
 	}
 
 	var realname string
+	var version string
 	defer rows.Close()
 
 	fmt.Println("Installed packages:")
 	for rows.Next() {
-		rows.Scan(&realname)
-		fmt.Println(realname)
+		rows.Scan(&realname, &version)
+		fmt.Printf("%s	%s\n", realname, version)
 	}
 	return nil
 }
