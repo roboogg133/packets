@@ -1,3 +1,5 @@
+//go:build linux
+
 package main
 
 import (
@@ -22,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/schollz/progressbar/v3"
 	"golang.org/x/net/ipv4"
 	_ "modernc.org/sqlite"
 
@@ -61,12 +64,6 @@ var Serialpass uint
 
 func main() {
 
-	uid := os.Getuid()
-	if uid != 0 {
-		fmt.Println("please, run packet as root")
-		return
-	}
-
 	if len(os.Args) < 2 {
 		fmt.Println("invalid syntax")
 		return
@@ -76,6 +73,11 @@ func main() {
 
 	switch cmd {
 	case "install":
+		if os.Getuid() != 0 {
+			fmt.Println("please, run as root")
+			return
+		}
+
 		if len(os.Args) < 3 {
 			fmt.Println("usage: packets install <name>")
 			return
@@ -145,6 +147,11 @@ func main() {
 		}
 
 	case "serve":
+		if os.Getuid() != 0 {
+			fmt.Println("please, run as root")
+			return
+		}
+
 		if len(os.Args) < 3 {
 			fmt.Println("usage: packets serve <option>\navaiable options: init, stop")
 			return
@@ -187,6 +194,11 @@ func main() {
 			return
 		}
 	case "sync":
+		if os.Getuid() != 0 {
+			fmt.Println("please, run as root")
+			return
+		}
+
 		if len(os.Args) < 3 {
 			fmt.Println("Starting to sync with https://servidordomal.fun/mirror/index.db")
 			if err := Sync("https://servidordomal.fun/mirror/index.db"); err != nil {
@@ -208,6 +220,11 @@ func main() {
 		return
 
 	case "remove":
+		if os.Getuid() != 0 {
+			fmt.Println("please, run as root")
+			return
+		}
+
 		if len(os.Args) < 3 {
 			fmt.Println("usage: packets remove <package-name>")
 			return
@@ -220,12 +237,19 @@ func main() {
 		}
 		return
 	case "list":
+
 		if err := ListPackets(); err != nil {
 			return
 		}
 		return
 
 	case "upgrade":
+
+		if os.Getuid() != 0 {
+			fmt.Println("please, run as root")
+			return
+		}
+
 		if len(os.Args) < 3 {
 			fmt.Println("usage: packets upgrade <realname>")
 			return
@@ -293,8 +317,6 @@ func ManifestReadXZ(path string) (*Manifest, error) {
 
 	tr := tar.NewReader(xzr)
 
-	fmt.Println("Reading manifest.json...")
-
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -326,8 +348,6 @@ func Install(packagepath string, serial uint) error {
 
 	name := manifest.Name
 
-	fmt.Printf("Installing %s...\n", name)
-
 	var destDir = fmt.Sprintf("/opt/packets/%s", name)
 
 	f, err := os.Open(packagepath)
@@ -344,6 +364,11 @@ func Install(packagepath string, serial uint) error {
 
 	tr := tar.NewReader(xzr)
 
+	bar := progressbar.NewOptions64(
+		-1,
+		progressbar.OptionSetDescription("[2/2] Installing ..."),
+		progressbar.OptionSetWriter(os.Stdout),
+	)
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -385,22 +410,23 @@ func Install(packagepath string, serial uint) error {
 			if err != nil {
 				return err
 			}
-			_, err = io.Copy(out, tr)
+
+			_, err = io.Copy(io.MultiWriter(out, bar), tr)
 			out.Close()
 			if err != nil {
 				return err
 			}
+
 			err = os.Chmod(absPath, os.FileMode(hdr.Mode))
 			if err != nil {
 				return err
 			}
 		default:
-			fmt.Printf("ignored type: %c\n", hdr.Typeflag)
+
 		}
-
-		fmt.Printf("\r\033[2KUnpacking: %s ", filepath.Base(rel))
-
 	}
+
+	bar.Finish()
 
 	manifest.Serial = serial
 
@@ -416,8 +442,6 @@ func Install(packagepath string, serial uint) error {
 	os.Chmod(script, 0777)
 	os.Chmod(fmt.Sprintf("%s/remove.sh", destDir), 0777)
 
-	fmt.Println("\nExecute ", fmt.Sprintf("%s/postinstall.sh", destDir), "?")
-
 	fmt.Println("\nMaking post install configuration...")
 	cmd := exec.Command(script)
 	cmd.Stdout = os.Stdout
@@ -430,7 +454,7 @@ func Install(packagepath string, serial uint) error {
 		return fmt.Errorf("error exec postinstall script %e", err)
 	}
 
-	fmt.Printf("Package %s fully installed you maybe run: \"source ~/.bashrc \"\n", name)
+	fmt.Printf("Package %s fully installed\n", name)
 
 	var insert = Installed{
 		Realname:     manifest.Name,
@@ -470,6 +494,14 @@ func GetPackageByMirror(mirror string, realname string) error {
 		log.Panic("error doing get request, do you really have an internet connection?")
 		return err
 	}
+	bar := progressbar.NewOptions64(resp.ContentLength,
+		progressbar.OptionSetDescription(fmt.Sprintf("[1/2] Downloading from %s...", mirror)),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionSetPredictTime(true),
+		progressbar.OptionShowCount(),
+		progressbar.OptionClearOnFinish(),
+	)
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
@@ -494,7 +526,7 @@ func GetPackageByMirror(mirror string, realname string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(io.MultiWriter(out, bar), resp.Body)
 	if err != nil {
 		err := os.Remove(fmt.Sprintf("/var/cache/packets/%s", filename))
 		if err != nil {
@@ -502,6 +534,7 @@ func GetPackageByMirror(mirror string, realname string) error {
 		}
 		return err
 	}
+	bar.Finish()
 
 	err = Validate(filename, realname)
 	if err != nil {
@@ -624,15 +657,14 @@ func QueryInstall(realname string) {
 		if answers != 0 {
 			for _, p := range peers {
 				fmt.Printf("Downloading from %s\n", p.IP)
-				if err := GetPackageByMirror(fmt.Sprintf("http://%s:%d/%s", p.IP, p.Port, filename), realname); err == nil {
+				if err := GetPackageByMirror(fmt.Sprintf("http://%s:%d/%s", p.IP, p.Port, filename), realname); err != nil {
 					log.Println(err)
 					break
 				}
 				fmt.Printf("Download failed!\n")
 			}
 		}
-		fmt.Printf("Downloading from %s\n", mirrors)
-		if err := GetPackageByMirror(mirrors, realname); err == nil {
+		if err := GetPackageByMirror(mirrors, realname); err != nil {
 			log.Println(err)
 			return
 		}
@@ -676,7 +708,7 @@ func QueryInstall(realname string) {
 				}
 			}
 			fmt.Printf("Downloading from %s\n", v)
-			if err := GetPackageByMirror(v, realname); err == nil {
+			if err := GetPackageByMirror(v, realname); err != nil {
 				log.Println(err)
 				break
 			}
@@ -1120,5 +1152,3 @@ func SearchUpgrades(name string) error {
 
 	return nil
 }
-
-// i will kill myself soon cuz im so dumb, i need to upgrade this code 100x, but with time everything will be good
