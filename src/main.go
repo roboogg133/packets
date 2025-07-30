@@ -31,6 +31,17 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
+type CountingReader struct {
+	R     io.Reader
+	Total int64
+}
+
+func (c *CountingReader) Read(p []byte) (int, error) {
+	n, err := c.R.Read(p)
+	c.Total += int64(n)
+	return n, err
+}
+
 type Installed struct {
 	Realname     string
 	Version      string
@@ -355,9 +366,15 @@ func Install(packagepath string, serial uint) error {
 		return err
 	}
 
+	stat, _ := f.Stat()
+
+	totalsize := stat.Size()
+
 	defer f.Close()
 
-	xzr, err := xz.NewReader(f)
+	counter := &CountingReader{R: f}
+
+	xzr, err := xz.NewReader(counter)
 	if err != nil {
 		return err
 	}
@@ -365,7 +382,7 @@ func Install(packagepath string, serial uint) error {
 	tr := tar.NewReader(xzr)
 
 	bar := progressbar.NewOptions64(
-		-1,
+		totalsize,
 		progressbar.OptionSetDescription("[2/2] Installing ..."),
 		progressbar.OptionSetWriter(os.Stdout),
 	)
@@ -411,11 +428,13 @@ func Install(packagepath string, serial uint) error {
 				return err
 			}
 
-			_, err = io.Copy(io.MultiWriter(out, bar), tr)
+			_, err = io.Copy(out, tr)
 			out.Close()
 			if err != nil {
 				return err
 			}
+
+			bar.Set(int(counter.Total))
 
 			err = os.Chmod(absPath, os.FileMode(hdr.Mode))
 			if err != nil {
@@ -494,8 +513,27 @@ func GetPackageByMirror(mirror string, realname string) error {
 		log.Panic("error doing get request, do you really have an internet connection?")
 		return err
 	}
+
+	var domain = mirror
+	var link bool
+
+	if cont := strings.Contains(mirror, "https"); cont {
+		link = true
+		domain = strings.Replace(mirror, "https", "", 1)
+	} else {
+		link = true
+		domain = strings.Replace(mirror, "http", "", 1)
+	}
+	if link {
+
+		domain = strings.Replace(domain, "://", "", 1)
+		slice := strings.SplitN(domain, "/", 2)
+
+		domain = slice[0]
+	}
+
 	bar := progressbar.NewOptions64(resp.ContentLength,
-		progressbar.OptionSetDescription(fmt.Sprintf("[1/2] Downloading from %s...", mirror)),
+		progressbar.OptionSetDescription(fmt.Sprintf("[1/2] Downloading from %s ...", domain)),
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionSetPredictTime(true),
 		progressbar.OptionShowCount(),
@@ -1017,7 +1055,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	name := manifest.Name
 
-	fmt.Printf("Upgrading %s to %s...\n", og_realname, name)
+	fmt.Printf("Unpacking (%s) above (%s)\n", og_realname, name)
 
 	var destDir = fmt.Sprintf("/opt/packets/%s", og_realname)
 
@@ -1025,15 +1063,24 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	if err != nil {
 		return err
 	}
-
+	stats, _ := f.Stat()
+	totalSize := stats.Size()
 	defer f.Close()
 
-	xzr, err := xz.NewReader(f)
+	counter := &CountingReader{R: f}
+
+	xzr, err := xz.NewReader(counter)
 	if err != nil {
 		return err
 	}
 
 	tr := tar.NewReader(xzr)
+
+	bar := progressbar.NewOptions64(
+		totalSize,
+		progressbar.OptionSetDescription("[2/2] Upgrading ..."),
+		progressbar.OptionSetWriter(os.Stdout),
+	)
 
 	for {
 		hdr, err := tr.Next()
@@ -1081,17 +1128,19 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 			if err != nil {
 				return err
 			}
+
+			bar.Set(int(counter.Total))
+
 			err = os.Chmod(absPath, os.FileMode(hdr.Mode))
 			if err != nil {
 				return err
 			}
 		default:
-			fmt.Printf("\r\033[2Kignored type: %c", hdr.Typeflag)
+
 		}
 
-		fmt.Printf("\r\033[2KUnpacking: %s ", filepath.Base(rel))
-
 	}
+	bar.Finish()
 
 	os.Rename(destDir, fmt.Sprintf("/opt/packets/%s", name))
 	destDir = fmt.Sprintf("/opt/packets/%s", name)
