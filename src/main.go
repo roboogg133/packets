@@ -102,7 +102,33 @@ func main() {
 	} else {
 		PacketsDir = "/etc/packets"
 	}
-	_, err := toml.DecodeFile(filepath.Join(PacketsDir, "config.toml"), &cfg)
+
+	_, err := os.Stat(filepath.Join(PacketsDir, "config.toml"))
+	if err == os.ErrNotExist {
+		fmt.Println("can't find config.toml, generating a blank one")
+
+		cfg.Config.HttpPort = 9123
+		cfg.Config.AutoDeleteCacheDir = false
+		cfg.Config.CacheDir = "/var/cache/packets"
+		cfg.Config.DataDir = "/opt/packets"
+		cfg.Config.DaysToDelete = -1
+
+		file, err := os.Create(filepath.Join(PacketsDir, "config.toml"))
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		encoder := toml.NewEncoder(file)
+
+		if err := encoder.Encode(cfg); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("Operation Sucess!")
+
+		file.Close()
+	}
+
+	_, err = toml.DecodeFile(filepath.Join(PacketsDir, "config.toml"), &cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
