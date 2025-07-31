@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"packets/internal"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -96,12 +97,8 @@ var PacketsDir string
 
 func main() {
 
-	out, _ := exec.Command("uname", "-s").Output()
-	if uname := strings.TrimSpace(string(out)); uname == "OpenTTY" {
-		PacketsDir = "/mnt/packets"
-	} else {
-		PacketsDir = "/etc/packets"
-	}
+	PacketsDir := internal.PacketsPackageDir()
+
 	_, err := os.Stat(filepath.Join(PacketsDir, "config.toml"))
 	if os.IsNotExist(err) {
 		fmt.Println("can't find config.toml, generating a default one")
@@ -373,45 +370,9 @@ func main() {
 	}
 }
 
-func ManifestReadXZ(path string) (*Manifest, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	xzr, err := xz.NewReader(f)
-	if err != nil {
-		return nil, err
-	}
-
-	tr := tar.NewReader(xzr)
-
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		if strings.HasSuffix(hdr.Name, "/manifest.json") || hdr.Name == "manifest.json" {
-
-			var manifest Manifest
-			decoder := json.NewDecoder(tr)
-			if err := decoder.Decode(&manifest); err != nil {
-				return nil, err
-			}
-			return &manifest, nil
-		}
-	}
-	return nil, fmt.Errorf("can't find manifest.json")
-}
-
 func Install(packagepath string, serial uint) error {
 
-	manifest, err := ManifestReadXZ(packagepath)
+	manifest, err := internal.ManifestReadXZ(packagepath)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -1107,7 +1068,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		return fmt.Errorf("this package isn't installed")
 	}
 
-	manifest, err := ManifestReadXZ(packagepath)
+	manifest, err := internal.ManifestReadXZ(packagepath)
 	if err != nil {
 		log.Panic(err)
 	}

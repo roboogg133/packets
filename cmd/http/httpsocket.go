@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 
+	"packets/internal"
+
 	"github.com/BurntSushi/toml"
 )
 
@@ -17,6 +19,8 @@ type ConfigTOML struct {
 }
 
 func main() {
+
+	internal.PacketsPackageDir()
 	var cfg ConfigTOML
 	toml.Decode("opt/packets/packets/config.toml", &cfg)
 
