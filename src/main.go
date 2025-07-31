@@ -36,7 +36,7 @@ type ConfigTOML struct {
 	Config struct {
 		HttpPort           int    `toml:"httpPort"`
 		CacheDir           string `toml:"cacheDir"`
-		AutoDeleteCacheDir bool   `toml:"dutoDeleteCacheDir"`
+		AutoDeleteCacheDir bool   `toml:"dayToDeleteCacheDir"`
 		DaysToDelete       int    `toml:"daysToDelete"`
 		DataDir            string `toml:"dataDir"`
 	} `toml:"Config"`
@@ -98,14 +98,13 @@ func main() {
 
 	out, _ := exec.Command("uname", "-s").Output()
 	if uname := strings.TrimSpace(string(out)); uname == "OpenTTY" {
-		PacketsDir = "/mnt"
+		PacketsDir = "/mnt/packets"
 	} else {
 		PacketsDir = "/etc/packets"
 	}
-
 	_, err := os.Stat(filepath.Join(PacketsDir, "config.toml"))
-	if err == os.ErrNotExist {
-		fmt.Println("can't find config.toml, generating a blank one")
+	if os.IsNotExist(err) {
+		fmt.Println("can't find config.toml, generating a default one")
 
 		cfg.Config.HttpPort = 9123
 		cfg.Config.AutoDeleteCacheDir = false
@@ -113,19 +112,21 @@ func main() {
 		cfg.Config.DataDir = "/opt/packets"
 		cfg.Config.DaysToDelete = -1
 
+		os.MkdirAll(PacketsDir, 0644)
 		file, err := os.Create(filepath.Join(PacketsDir, "config.toml"))
 		if err != nil {
+
 			log.Fatal(err)
 		}
+		defer file.Close()
 
 		encoder := toml.NewEncoder(file)
 
 		if err := encoder.Encode(cfg); err != nil {
+
 			log.Fatal(err)
 		}
 		fmt.Println("Operation Sucess!")
-
-		file.Close()
 	}
 
 	_, err = toml.DecodeFile(filepath.Join(PacketsDir, "config.toml"), &cfg)
