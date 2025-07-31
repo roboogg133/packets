@@ -34,8 +34,8 @@ import (
 
 type ConfigTOML struct {
 	Config struct {
-		DefaultHttpPort    int    `toml:"defaultHttpPort"`
-		DefaultCacheDir    string `toml:"defaultCacheDir"`
+		HttpPort           int    `toml:"httpPort"`
+		CacheDir           string `toml:"cacheDir"`
 		AutoDeleteCacheDir bool   `toml:"dutoDeleteCacheDir"`
 		DaysToDelete       int    `toml:"daysToDelete"`
 		DataDir            string `toml:"dataDir"`
@@ -300,14 +300,14 @@ func main() {
 
 		og_realname := os.Args[2]
 
-		db, err := sql.Open("sqlite", "/opt/packets/packets/index.db")
+		db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
 		if err != nil {
 			log.Fatal(err)
 			return
 		}
 		defer db.Close()
 
-		idb, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+		idb, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
 		if err != nil {
 			log.Fatal(err)
 			return
@@ -391,7 +391,7 @@ func Install(packagepath string, serial uint) error {
 
 	name := manifest.Name
 
-	var destDir = fmt.Sprintf("/opt/packets/%s", name)
+	var destDir = filepath.Join(cfg.Config.DataDir, name)
 
 	f, err := os.Open(packagepath)
 	if err != nil {
@@ -524,7 +524,7 @@ func Install(packagepath string, serial uint) error {
 
 func GetPackageByMirror(mirror string, realname string) error {
 
-	db, err := sql.Open("sqlite", "/opt/packets/packets/index.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -575,7 +575,7 @@ func GetPackageByMirror(mirror string, realname string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		err := os.Remove(fmt.Sprintf("/var/cache/packets/%s", filename))
+		err := os.Remove(filepath.Join(cfg.Config.CacheDir, filename))
 		if os.IsNotExist(err) {
 			return fmt.Errorf("failed to download, status code not 200OK")
 		} else if err != nil {
@@ -584,12 +584,12 @@ func GetPackageByMirror(mirror string, realname string) error {
 		return fmt.Errorf("failed to download, status code not 200OK")
 	}
 
-	if err := os.MkdirAll("/var/cache/packets", 0755); err != nil {
+	if err := os.MkdirAll(cfg.Config.CacheDir, 0755); err != nil {
 		log.Fatal("error creating file for package ", err)
 		return err
 	}
 
-	out, err := os.Create(fmt.Sprintf("/var/cache/packets/%s", filename))
+	out, err := os.Create(filepath.Join(cfg.Config.CacheDir, filename))
 	if err != nil {
 		log.Fatal("error creating package ", err)
 		return err
@@ -598,7 +598,7 @@ func GetPackageByMirror(mirror string, realname string) error {
 
 	_, err = io.Copy(io.MultiWriter(out, bar), resp.Body)
 	if err != nil {
-		err := os.Remove(fmt.Sprintf("/var/cache/packets/%s", filename))
+		err := os.Remove(filepath.Join(cfg.Config.CacheDir, filename))
 		if err != nil {
 			return err
 		}
@@ -612,12 +612,12 @@ func GetPackageByMirror(mirror string, realname string) error {
 	}
 
 	if os.Args[1] == "upgrade" {
-		if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], serialPass); err != nil {
+		if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), os.Args[2], serialPass); err != nil {
 			return err
 		}
 		return nil
 	}
-	err = Install(fmt.Sprintf("/var/cache/packets/%s", filename), serial)
+	err = Install(filepath.Join(cfg.Config.CacheDir, filename), serial)
 	if err != nil {
 		return err
 	}
@@ -626,7 +626,7 @@ func GetPackageByMirror(mirror string, realname string) error {
 }
 func ResolvDependencies(realname string) {
 
-	db, err := sql.Open("sqlite", "/opt/packets/packets/index.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -658,18 +658,18 @@ func ResolvDependencies(realname string) {
 
 func QueryInstall(realname string) {
 
-	_, err := os.Stat("/opt/packets/packets/index.db")
+	_, err := os.Stat(filepath.Join(PacketsDir, "index.db"))
 	if os.IsNotExist(err) {
 		fmt.Println("cant find index.db, please use sync first")
 	}
 
-	db, err := sql.Open("sqlite", "/opt/packets/packets/index.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
 		log.Fatal("cant find index.db, please use sync first")
 	}
 	defer db.Close()
 
-	simplecheck, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+	simplecheck, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
 	if err == nil {
 
 		var exist bool
@@ -711,13 +711,13 @@ func QueryInstall(realname string) {
 				return
 			}
 			if os.Args[1] == "upgrade" {
-				if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], serialPass); err != nil {
+				if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), os.Args[2], serialPass); err != nil {
 					log.Fatal(err)
 					return
 				}
 				return
 			}
-			Install(fmt.Sprintf("/var/cache/packets/%s", filename), serial)
+			Install(filepath.Join(cfg.Config.CacheDir, filename), serial)
 			return
 
 		}
@@ -755,13 +755,13 @@ func QueryInstall(realname string) {
 					continue
 				} else {
 					if os.Args[1] == "upgrade" {
-						if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], serialPass); err != nil {
+						if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), os.Args[2], serialPass); err != nil {
 							log.Fatal(err)
 							return
 						}
 						break
 					}
-					Install(fmt.Sprintf("/var/cache/packets/%s", filename), serial)
+					Install(filepath.Join(cfg.Config.CacheDir, filename), serial)
 					break
 				}
 			}
@@ -790,7 +790,7 @@ func QueryInstall(realname string) {
 
 func CheckDownloaded(filename string) bool {
 
-	_, err := os.Stat(fmt.Sprintf("/var/cache/packets/%s", filename))
+	_, err := os.Stat(filepath.Join(cfg.Config.CacheDir, filename))
 	if os.IsNotExist(err) {
 		return false
 	} else {
@@ -801,14 +801,14 @@ func CheckDownloaded(filename string) bool {
 
 func Validate(filename string, realname string) error {
 
-	db, err := sql.Open("sqlite", "/opt/packets/packets/index.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
 		log.Fatal(err)
 		return err
 	}
 	defer db.Close()
 
-	downloaded, err := os.Open(fmt.Sprintf("/var/cache/packets/%s", filename))
+	downloaded, err := os.Open(filepath.Join(cfg.Config.CacheDir, filename))
 	if err != nil {
 		log.Fatal("error reading new file")
 		return err
@@ -835,7 +835,7 @@ func Validate(filename string, realname string) error {
 	if hashString != hashStringDB {
 		fmt.Println("tampered package, removing it...\nplease run the command again")
 
-		err := os.Remove(fmt.Sprintf("/var/cache/packets/%s", filename))
+		err := os.Remove(filepath.Join(cfg.Config.CacheDir, filename))
 		if err != nil {
 			return err
 		}
@@ -914,12 +914,12 @@ func Sync(url string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	_, err = os.Stat("/opt/packets/packets/index.db")
+	_, err = os.Stat(filepath.Join(PacketsDir, "index.db"))
 
 	if os.IsNotExist(err) {
-		os.MkdirAll("/opt/packets/packets", 0755)
+		os.MkdirAll("/etc/packets", 0755)
 	}
-	f, err := os.Create("/opt/packets/packets/index.db")
+	f, err := os.Create(filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
 		return err
 	}
@@ -931,7 +931,7 @@ func Sync(url string) error {
 }
 
 func AddToInstalledDB(insert Installed) error {
-	db, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -967,7 +967,7 @@ func AddToInstalledDB(insert Installed) error {
 }
 
 func Unninstall(realname string) error {
-	db, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -992,14 +992,14 @@ func Unninstall(realname string) error {
 		return fmt.Errorf("operation cancelled")
 	}
 
-	cmd := exec.Command(fmt.Sprintf("/opt/packets/%s/remove.sh", realname))
+	cmd := exec.Command(filepath.Join(cfg.Config.DataDir, realname, "remove.sh"))
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 
 	if err := cmd.Run(); err != nil {
 		return err
 	}
 
-	if err := os.RemoveAll(fmt.Sprintf("/opt/packets/%s", realname)); err != nil {
+	if err := os.RemoveAll(filepath.Join(cfg.Config.DataDir, realname)); err != nil {
 		return err
 	}
 
@@ -1014,7 +1014,7 @@ func Unninstall(realname string) error {
 
 func AlredySatisfied(realname string) error {
 
-	db, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -1036,7 +1036,7 @@ func AlredySatisfied(realname string) error {
 
 func ListPackets() error {
 
-	db, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -1062,7 +1062,7 @@ func ListPackets() error {
 
 func Upgrade(packagepath string, og_realname string, serial uint) error {
 
-	db, err := sql.Open("sqlite", "/opt/packets/packets/installed.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -1089,7 +1089,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	fmt.Printf("Unpacking (%s) above (%s)\n", og_realname, name)
 
-	var destDir = fmt.Sprintf("/opt/packets/%s", og_realname)
+	var destDir = filepath.Join(cfg.Config.DataDir, og_realname)
 
 	f, err := os.Open(packagepath)
 	if err != nil {
@@ -1174,8 +1174,8 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	}
 	bar.Finish()
 
-	os.Rename(destDir, fmt.Sprintf("/opt/packets/%s", name))
-	destDir = fmt.Sprintf("/opt/packets/%s", name)
+	os.Rename(destDir, filepath.Join(cfg.Config.DataDir, name))
+	destDir = filepath.Join(cfg.Config.DataDir, name)
 
 	manifest.Serial = serial
 
@@ -1184,12 +1184,12 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		log.Println(err)
 	}
 
-	os.WriteFile(fmt.Sprintf("%s/manifest.json", destDir), jsonData, 0777)
+	os.WriteFile(filepath.Join(destDir, "manifest.json"), jsonData, 0777)
 
-	script := fmt.Sprintf("%s/postinstall.sh", destDir)
+	script := fmt.Sprintf(filepath.Join(destDir, "postinstall.sh"), destDir)
 
 	os.Chmod(script, 0777)
-	os.Chmod(fmt.Sprintf("%s/remove.sh", destDir), 0777)
+	os.Chmod(fmt.Sprintf(filepath.Join(destDir, "remove.sh"), destDir), 0777)
 
 	fmt.Println("Making post install configuration...")
 	cmd := exec.Command(script)
@@ -1224,7 +1224,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 func SearchUpgrades(name string) error {
 
-	db, err := sql.Open("sqlite", "/opt/packets/packets/index.db")
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
 		log.Fatal(err)
 		return err
