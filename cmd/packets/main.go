@@ -97,7 +97,7 @@ var PacketsDir string
 
 func main() {
 
-	PacketsDir := internal.PacketsPackageDir()
+	PacketsDir = internal.PacketsPackageDir()
 
 	_, err := os.Stat(filepath.Join(PacketsDir, "config.toml"))
 	if os.IsNotExist(err) {
