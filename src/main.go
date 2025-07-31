@@ -442,7 +442,7 @@ func Install(packagepath string, serial uint) error {
 
 	bar := progressbar.NewOptions64(
 		totalsize,
-		progressbar.OptionSetDescription("[2/2] Installing ..."),
+		progressbar.OptionSetDescription("[2/2] Unpacking ..."),
 		progressbar.OptionSetWriter(os.Stdout),
 	)
 	for {
