@@ -983,6 +983,12 @@ func Unninstall(realname string) error {
 	}
 
 	cmd := exec.Command(filepath.Join(cfg.Config.DataDir, realname, "remove.sh"))
+
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("PACKETS_PACKAGE_DIR=%s", cfg.Config.DataDir),
+		fmt.Sprintf("PACKETS_PACKAGE_BIN_DIR=%s", cfg.Config.BinDir),
+	)
+
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 
 	if err := cmd.Run(); err != nil {
