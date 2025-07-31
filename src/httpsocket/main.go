@@ -11,8 +11,8 @@ import (
 
 type ConfigTOML struct {
 	Config struct {
-		DefaultHttpPort int    `toml:"defaultHttpPort"`
-		DefaultCacheDir string `toml:"defaultCacheDir"`
+		DefaultHttpPort int    `toml:"httpPort"`
+		DefaultCacheDir string `toml:"cacheDir"`
 	} `toml:"Config"`
 }
 
