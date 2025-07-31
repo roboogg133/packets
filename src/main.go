@@ -1220,6 +1220,11 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	fmt.Println("Making post install configuration...")
 	cmd := exec.Command(script)
+
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("PACKETS_PACKAGE_DIR=%s", cfg.Config.DataDir),
+	// TODO 	"ADD_TO_PATH=,
+	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
