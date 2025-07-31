@@ -40,6 +40,8 @@ type ConfigTOML struct {
 		AutoDeleteCacheDir bool   `toml:"dayToDeleteCacheDir"`
 		DaysToDelete       int    `toml:"daysToDelete"`
 		DataDir            string `toml:"dataDir"`
+		BinDir             string `toml:"binDir"`
+		LastDataDir        string `toml:"lastDataDir"`
 	} `toml:"Config"`
 }
 
@@ -103,26 +105,21 @@ func main() {
 	if os.IsNotExist(err) {
 		fmt.Println("can't find config.toml, generating a default one")
 
-		cfg.Config.HttpPort = 9123
-		cfg.Config.AutoDeleteCacheDir = false
-		cfg.Config.CacheDir = "/var/cache/packets"
-		cfg.Config.DataDir = "/opt/packets"
-		cfg.Config.DaysToDelete = -1
-
 		os.MkdirAll(PacketsDir, 0644)
 		file, err := os.Create(filepath.Join(PacketsDir, "config.toml"))
 		if err != nil {
-
 			log.Fatal(err)
 		}
 		defer file.Close()
 
+		cfg := internal.DefaultConfigTOML()
+
 		encoder := toml.NewEncoder(file)
 
 		if err := encoder.Encode(cfg); err != nil {
-
 			log.Fatal(err)
 		}
+		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir")
 		fmt.Println("Operation Sucess!")
 	}
 
@@ -483,6 +480,11 @@ func Install(packagepath string, serial uint) error {
 
 	fmt.Println("\nMaking post install configuration...")
 	cmd := exec.Command(script)
+
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("PACKETS_PACKAGE_DIR=%s", cfg.Config.DataDir),
+		fmt.Sprintf("PACKETS_PACKAGE_BIN_DIR=%s", cfg.Config.BinDir),
+	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -1184,7 +1186,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("PACKETS_PACKAGE_DIR=%s", cfg.Config.DataDir),
-	// TODO 	"ADD_TO_PATH=,
+		fmt.Sprintf("PACKETS_PACKAGE_BIN_DIR=%s", cfg.Config.BinDir),
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

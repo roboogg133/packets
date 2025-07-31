@@ -12,6 +12,18 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
+type ConfigTOML struct {
+	Config struct {
+		HttpPort           int    `toml:"httpPort"`
+		CacheDir           string `toml:"cacheDir"`
+		AutoDeleteCacheDir bool   `toml:"dayToDeleteCacheDir"`
+		DaysToDelete       int    `toml:"daysToDelete"`
+		DataDir            string `toml:"dataDir"`
+		BinDir             string `toml:"binDir"`
+		LastDataDir        string `toml:"lastDataDir"`
+	} `toml:"Config"`
+}
+
 type Manifest struct {
 	Name         string   `json:"name"`
 	Version      string   `json:"version"`
@@ -67,4 +79,33 @@ func ManifestReadXZ(path string) (*Manifest, error) {
 		}
 	}
 	return nil, fmt.Errorf("can't find manifest.json")
+}
+
+func DefaultConfigTOML() *ConfigTOML {
+
+	var cfg ConfigTOML
+	out, _ := exec.Command("uname", "-s").Output()
+
+	if uname := strings.TrimSpace(string(out)); uname == "OpenTTY" {
+		cfg.Config.HttpPort = 9123
+		cfg.Config.AutoDeleteCacheDir = false
+		cfg.Config.CacheDir = "/mnt/... " // TODO
+		cfg.Config.DataDir = "/mnt/... "  // TODO
+		cfg.Config.DaysToDelete = -1
+		cfg.Config.BinDir = "/home/...."     // TODO
+		cfg.Config.LastDataDir = "/mnt/... " // TODO
+		return &cfg
+	} else {
+
+		cfg.Config.HttpPort = 9123
+		cfg.Config.AutoDeleteCacheDir = false
+		cfg.Config.CacheDir = "/var/cache/packets"
+		cfg.Config.DataDir = "/opt/packets"
+		cfg.Config.DaysToDelete = -1
+		cfg.Config.BinDir = "/usr/bin"
+		cfg.Config.LastDataDir = "/opt/packets"
+
+		return &cfg
+	}
+
 }
