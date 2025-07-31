@@ -24,12 +24,31 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/schollz/progressbar/v3"
 	"golang.org/x/net/ipv4"
 	_ "modernc.org/sqlite"
 
 	"github.com/ulikunitz/xz"
 )
+
+type ConfigTOML struct {
+	Config struct {
+		DefaultHttpPort    int    `toml:"defaultHttpPort"`
+		DefaultCacheDir    string `toml:"defaultCacheDir"`
+		AutoDeleteCacheDir bool   `toml:"dutoDeleteCacheDir"`
+		DaysToDelete       int    `toml:"daysToDelete"`
+		DataDir            string `toml:"dataDir"`
+	} `toml:"Config"`
+}
+
+type IndexTOML struct {
+	Name        string    `toml:"name"`
+	Version     string    `toml:"version"`
+	Author      string    `toml:"author"`
+	Description string    `toml:"description"`
+	CreatedAt   time.Time `toml:"createdAt"`
+}
 
 type CountingReader struct {
 	R     io.Reader
@@ -71,9 +90,22 @@ type Manifest struct {
 	Serial       uint     `json:"serial"`
 }
 
-var Serialpass uint
+var serialPass uint
+var cfg ConfigTOML
+var PacketsDir string
 
 func main() {
+
+	out, _ := exec.Command("uname", "-s").Output()
+	if uname := strings.TrimSpace(string(out)); uname == "OpenTTY" {
+		PacketsDir = "/mnt"
+	} else {
+		PacketsDir = "/etc/packets"
+	}
+	_, err := toml.DecodeFile(filepath.Join(PacketsDir, "config.toml"), &cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if len(os.Args) < 2 {
 		fmt.Println("invalid syntax")
@@ -94,7 +126,7 @@ func main() {
 			return
 		}
 
-		db, err := sql.Open("sqlite", "/opt/packets/packets/index.db")
+		db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
 		if err != nil {
 			log.Fatal(err)
 			return
@@ -171,8 +203,8 @@ func main() {
 		case "init":
 
 			var sockets [2]string
-			sockets[0] = "/opt/packets/packets/udpsocket"
-			sockets[1] = "/opt/packets/packets/httpsocket"
+			sockets[0] = filepath.Join(PacketsDir, "udpsocket")
+			sockets[1] = filepath.Join(PacketsDir, "httpsocket")
 
 			for _, v := range sockets {
 				abs, _ := filepath.Abs(v)
@@ -188,8 +220,8 @@ func main() {
 		case "stop":
 
 			var pidfiles [2]string
-			pidfiles[0] = "/opt/packets/packets/http.pid"
-			pidfiles[1] = "/opt/packets/packets/udp.pid"
+			pidfiles[0] = filepath.Join(PacketsDir, "http.pid")
+			pidfiles[1] = filepath.Join(PacketsDir, "udp.pid")
 
 			for _, v := range pidfiles {
 				data, err := os.ReadFile(v)
@@ -300,7 +332,7 @@ func main() {
 			return
 		}
 
-		if err := db.QueryRow("SELECT serial FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&Serialpass); err != nil {
+		if err := db.QueryRow("SELECT serial FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&serialPass); err != nil {
 			log.Fatal("line 255", err)
 			return
 		}
@@ -580,7 +612,7 @@ func GetPackageByMirror(mirror string, realname string) error {
 	}
 
 	if os.Args[1] == "upgrade" {
-		if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], Serialpass); err != nil {
+		if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], serialPass); err != nil {
 			return err
 		}
 		return nil
@@ -679,7 +711,7 @@ func QueryInstall(realname string) {
 				return
 			}
 			if os.Args[1] == "upgrade" {
-				if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], Serialpass); err != nil {
+				if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], serialPass); err != nil {
 					log.Fatal(err)
 					return
 				}
@@ -723,7 +755,7 @@ func QueryInstall(realname string) {
 					continue
 				} else {
 					if os.Args[1] == "upgrade" {
-						if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], Serialpass); err != nil {
+						if err := Upgrade(fmt.Sprintf("/var/cache/packets/%s", filename), os.Args[2], serialPass); err != nil {
 							log.Fatal(err)
 							return
 						}
