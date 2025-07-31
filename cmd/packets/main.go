@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -377,6 +378,67 @@ func Install(packagepath string, serial uint) error {
 	name := manifest.Name
 
 	var destDir = filepath.Join(cfg.Config.DataDir, name)
+
+	if cfg.Config.LastDataDir != cfg.Config.DataDir {
+		fmt.Printf("Ooops... Data directory has been changed from (%s), to (%s), do you want to cancel the installation and Sync first?\n y/n? ", cfg.Config.LastDataDir, cfg.Config.DataDir)
+
+		var answer string
+
+		fmt.Scan(&answer)
+
+		if answer == "y" || answer == "Y" {
+			if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
+				return err
+			}
+
+			bar := progressbar.NewOptions64(-1,
+				progressbar.OptionSetDescription("Moving ..."),
+			)
+
+			err := filepath.WalkDir(cfg.Config.LastDataDir, func(last string, d fs.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+
+				if last == cfg.Config.LastDataDir {
+					return nil
+				}
+
+				rel, err := filepath.Rel(cfg.Config.LastDataDir, last)
+				if err != nil {
+					return err
+				}
+				dest := filepath.Join(cfg.Config.DataDir, rel)
+
+				if d.IsDir() {
+					return os.MkdirAll(dest, 0755)
+				}
+
+				return os.Rename(last, dest)
+
+			})
+			if err != nil {
+				return err
+			}
+
+			f, err := os.OpenFile(filepath.Join(PacketsDir, "config.toml"), os.O_WRONLY, 0644)
+			if err != nil {
+				return err
+			}
+
+			cfg.Config.LastDataDir = cfg.Config.DataDir
+
+			encoder := toml.NewEncoder(f)
+
+			err = encoder.Encode(cfg)
+
+			if err != nil {
+				bar.Finish()
+				return err
+			}
+			bar.Finish()
+		}
+	}
 
 	f, err := os.Open(packagepath)
 	if err != nil {
@@ -907,7 +969,7 @@ func Sync(url string) error {
 	_, err = os.Stat(filepath.Join(PacketsDir, "index.db"))
 
 	if os.IsNotExist(err) {
-		os.MkdirAll("/etc/packets", 0755)
+		os.MkdirAll(PacketsDir, 0755)
 	}
 	f, err := os.Create(filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
@@ -917,6 +979,122 @@ func Sync(url string) error {
 	if _, err = io.Copy(f, resp.Body); err != nil {
 		return err
 	}
+
+	if cfg.Config.LastDataDir != cfg.Config.DataDir {
+		fmt.Printf("Ooops... Data directory has been changed on %s do you want to move the packages from (%s), to (%s)\n", filepath.Join(PacketsDir, "config.toml"), cfg.Config.LastDataDir, cfg.Config.DataDir)
+		fmt.Println("What you want to do?")
+		fmt.Println("[y] Yes [n] No, [x] Ignore it and stop to show this message (not recommended)")
+	}
+	var answer string
+	fmt.Scanln(&answer)
+
+	switch answer {
+	case "n":
+		fmt.Println("Just ignoring...")
+
+	case "x":
+		f, err := os.OpenFile(filepath.Join(PacketsDir, "config.toml"), os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+
+		cfg.Config.LastDataDir = cfg.Config.DataDir
+
+		encoder := toml.NewEncoder(f)
+
+		err = encoder.Encode(cfg)
+		if err != nil {
+			return err
+		}
+
+	case "y":
+		if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
+			return err
+		}
+
+		bar := progressbar.NewOptions64(-1,
+			progressbar.OptionSetDescription("Moving ..."),
+		)
+
+		err := filepath.WalkDir(cfg.Config.LastDataDir, func(last string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+
+			if last == cfg.Config.LastDataDir {
+				return nil
+			}
+
+			rel, err := filepath.Rel(cfg.Config.LastDataDir, last)
+			if err != nil {
+				return err
+			}
+			dest := filepath.Join(cfg.Config.DataDir, rel)
+
+			if d.IsDir() {
+				return os.MkdirAll(dest, 0755)
+			}
+
+			return os.Rename(last, dest)
+
+		})
+		if err != nil {
+			return err
+		}
+
+		f, err := os.OpenFile(filepath.Join(PacketsDir, "config.toml"), os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+
+		cfg.Config.LastDataDir = cfg.Config.DataDir
+
+		encoder := toml.NewEncoder(f)
+
+		err = encoder.Encode(cfg)
+		if err != nil {
+			return err
+		}
+		bar.Finish()
+
+	default:
+		if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
+			return err
+		}
+
+		bar := progressbar.NewOptions64(-1,
+			progressbar.OptionSetDescription("Moving ..."),
+		)
+
+		err := filepath.WalkDir(cfg.Config.LastDataDir, func(last string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+
+			if last == cfg.Config.LastDataDir {
+				return nil
+			}
+
+			rel, err := filepath.Rel(cfg.Config.LastDataDir, last)
+			if err != nil {
+				return err
+			}
+			dest := filepath.Join(cfg.Config.DataDir, rel)
+
+			if d.IsDir() {
+				return os.MkdirAll(dest, 0755)
+			}
+
+			return os.Rename(last, dest)
+
+		})
+		if err != nil {
+			return err
+		}
+		bar.Finish()
+
+	}
+
 	return nil
 }
 
@@ -1074,6 +1252,68 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	if !exist {
 		return fmt.Errorf("this package isn't installed")
+	}
+
+	if cfg.Config.LastDataDir != cfg.Config.DataDir {
+		fmt.Printf("Ooops... Data directory has been changed from (%s), to (%s), do you want to cancel the installation and Sync first?\n y/n? ", cfg.Config.LastDataDir, cfg.Config.DataDir)
+
+		var answer string
+
+		fmt.Scan(&answer)
+
+		if answer == "y" || answer == "Y" {
+			if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
+				return err
+			}
+
+			bar := progressbar.NewOptions64(-1,
+				progressbar.OptionSetDescription("Moving ..."),
+			)
+
+			err := filepath.WalkDir(cfg.Config.LastDataDir, func(last string, d fs.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+
+				if last == cfg.Config.LastDataDir {
+					return nil
+				}
+
+				rel, err := filepath.Rel(cfg.Config.LastDataDir, last)
+				if err != nil {
+					return err
+				}
+				dest := filepath.Join(cfg.Config.DataDir, rel)
+
+				if d.IsDir() {
+					return os.MkdirAll(dest, 0755)
+				}
+
+				return os.Rename(last, dest)
+
+			})
+
+			if err != nil {
+				return err
+			}
+
+			f, err := os.OpenFile(filepath.Join(PacketsDir, "config.toml"), os.O_WRONLY, 0644)
+			if err != nil {
+				return err
+			}
+
+			cfg.Config.LastDataDir = cfg.Config.DataDir
+
+			encoder := toml.NewEncoder(f)
+
+			err = encoder.Encode(cfg)
+
+			if err != nil {
+				bar.Finish()
+				return err
+			}
+			bar.Finish()
+		}
 	}
 
 	manifest, err := internal.ManifestReadXZ(packagepath)
