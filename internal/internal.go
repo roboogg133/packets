@@ -189,16 +189,83 @@ func IsSafe(str string) bool {
 }
 
 func SafeRemove(L *lua.LState) int {
-	path := L.CheckString(1)
-	if !IsSafe(path) {
+	filename := L.CheckString(1)
+	if !IsSafe(filename) {
 		L.Push(lua.LFalse)
-		return 1
+		L.Push(lua.LString("[packets] unsafe filepath"))
+		return 2
 	}
-	err := os.Remove(path)
+	err := os.Remove(filename)
 	if err != nil {
 		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] remove failed\n" + err.Error()))
 		return 1
 	}
 	L.Push(lua.LTrue)
 	return 1
+}
+
+func SafeRename(L *lua.LState) int {
+	oldname := L.CheckString(1)
+	newname := L.CheckString(2)
+
+	if !IsSafe(oldname) || !IsSafe(newname) {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] unsafe filepath"))
+		return 2
+	}
+
+	if err := os.Rename(oldname, newname); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] rename failed\n" + err.Error()))
+		return 2
+	}
+
+	L.Push(lua.LTrue)
+	return 1
+}
+func SafeCopy(L *lua.LState) int {
+	oldname := L.CheckString(1)
+	newname := L.CheckString(2)
+
+	if !IsSafe(oldname) || !IsSafe(newname) {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] unsafe filepath"))
+		return 2
+	}
+
+	src, err := os.Open(oldname)
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+		return 2
+
+	}
+	defer src.Close()
+
+	err = os.MkdirAll(filepath.Dir(newname), 0755)
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+		return 2
+	}
+
+	dst, err := os.Create(newname)
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+		return 2
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, src)
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+		return 2
+	}
+
+	L.Push(lua.LTrue)
+	L.Push(lua.LNil)
+	return 2
 }

@@ -531,21 +531,28 @@ func Install(packagepath string, serial uint) error {
 		}
 	}
 
-	bar.Finish()
-
 	// TODO LUA SCRIPT
 
 	L := lua.NewState()
 	defer L.Close()
 
+	osObject := L.GetGlobal("os").(*lua.LTable)
+
 	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
-	L.SetField(L.GetGlobal("os"), "remove", L.NewFunction(internal.SafeRemove))
+	osObject.RawSetString("execute", lua.LNil)
+	osObject.RawSetString("exit", lua.LNil)
+	osObject.RawSetString("getenv", lua.LNil)
+
+	osObject.RawSetString("remove", L.NewFunction(internal.SafeRemove))
+	osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
+	osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
 
 	if err := L.DoFile(manifest.Hooks.Install); err != nil {
 		log.Panic(err)
 	}
 
+	bar.Finish()
 	fmt.Printf("Package %s fully installed\n", name)
 
 	var insert = Installed{
@@ -1407,8 +1414,6 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	bar.Finish()
 
 	os.Rename(destDir, filepath.Join(cfg.Config.DataDir, name))
-
-	destDir = filepath.Join(cfg.Config.DataDir, name)
 
 	//TODO manifest.toml things
 
