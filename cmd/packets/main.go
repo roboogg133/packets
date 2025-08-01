@@ -537,6 +537,7 @@ func Install(packagepath string, serial uint) error {
 	defer L.Close()
 
 	osObject := L.GetGlobal("os").(*lua.LTable)
+	ioObject := L.GetGlobal("io").(*lua.LTable)
 
 	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
@@ -547,6 +548,17 @@ func Install(packagepath string, serial uint) error {
 	osObject.RawSetString("remove", L.NewFunction(internal.SafeRemove))
 	osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
 	osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
+	osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
+
+	ioObject.RawSetString("input", lua.LNil)
+	ioObject.RawSetString("output", lua.LNil)
+	ioObject.RawSetString("popen", lua.LNil)
+	ioObject.RawSetString("tmpfile", lua.LNil)
+	ioObject.RawSetString("stdout", lua.LNil)
+	ioObject.RawSetString("stdeer", lua.LNil)
+	ioObject.RawSetString("stdin", lua.LNil)
+	ioObject.RawSetString("lines", lua.LNil)
+	ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
 
 	if err := L.DoFile(manifest.Hooks.Install); err != nil {
 		log.Panic(err)

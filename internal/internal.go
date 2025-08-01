@@ -282,3 +282,71 @@ func SafeCopy(L *lua.LState) int {
 	L.Push(lua.LNil)
 	return 2
 }
+
+func SymbolicLua(L *lua.LState) int {
+	fileName := L.CheckString(1)
+	destination := L.CheckString(2)
+
+	if !IsSafe(fileName) || !IsSafe(destination) {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] unsafe filepath"))
+		return 2
+	}
+
+	if err := os.Symlink(fileName, destination); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] symlink failed\n" + err.Error()))
+	}
+
+	L.Push(lua.LTrue)
+	L.Push(lua.LNil)
+	return 2
+}
+
+func modeFlags(mode string) int {
+	switch mode {
+	case "r", "rb":
+		return os.O_RDONLY
+	case "w", "wb":
+		return os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	case "a", "ab":
+		return os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	case "r+", "r+b", "rb+", "br+":
+		return os.O_RDWR
+	case "w+", "w+b", "wb+", "bw+":
+		return os.O_CREATE | os.O_RDWR | os.O_TRUNC
+	case "a+", "a+b", "ab+", "ba+":
+		return os.O_CREATE | os.O_RDWR | os.O_APPEND
+	default:
+		return os.O_RDONLY
+	}
+}
+
+func SafeOpen(L *lua.LState) int {
+	path := L.CheckString(1)
+	mode := L.OptString(2, "r")
+
+	if !IsSafe(path) {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("[packets] unsafe filepath"))
+		return 2
+	}
+	file, err := os.OpenFile(path, modeFlags(mode), 0644)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	ud := L.NewUserData()
+	ud.Value = file
+	L.SetMetatable(ud, L.GetTypeMetatable("file"))
+	L.Push(ud)
+	L.Push(lua.LNil)
+	return 2
+}
+
+func safeLines(L *lua.LState) int {
+
+	return 2
+}
