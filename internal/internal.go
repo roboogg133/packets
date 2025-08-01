@@ -243,6 +243,13 @@ func SafeCopy(L *lua.LState) int {
 	}
 	defer src.Close()
 
+	status, err := src.Stat()
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+		return 2
+	}
+
 	err = os.MkdirAll(filepath.Dir(newname), 0755)
 	if err != nil {
 		L.Push(lua.LFalse)
@@ -256,7 +263,13 @@ func SafeCopy(L *lua.LState) int {
 		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
 		return 2
 	}
+
 	defer dst.Close()
+	if err := dst.Chmod(status.Mode()); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+		return 2
+	}
 
 	_, err = io.Copy(dst, src)
 	if err != nil {
