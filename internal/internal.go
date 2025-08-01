@@ -189,15 +189,16 @@ func IsSafe(str string) bool {
 }
 
 func safeRemove(L *lua.LState) int {
-	path := L.CheckString(1)
-	if !strings.HasPrefix(path, safeBase) {
-		L.Push(lua.LString("acesso negado"))
+	path := L.ToString(1)
+	if !IsSafe(path) {
+		L.Push(lua.LFalse)
 		return 1
 	}
 	err := os.Remove(path)
 	if err != nil {
-		L.Push(lua.LString(err.Error()))
+		L.Push(lua.LFalse)
 		return 1
 	}
-	return 0
+	L.Push(lua.LTrue)
+	return 1
 }
