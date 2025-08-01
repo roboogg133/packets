@@ -540,6 +540,7 @@ func Install(packagepath string, serial uint) error {
 
 	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
+	L.SetField(L.GetGlobal("os"), "remove", L.NewFunction(internal.SafeRemove))
 
 	if err := L.DoFile(manifest.Hooks.Install); err != nil {
 		log.Panic(err)

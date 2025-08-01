@@ -188,8 +188,8 @@ func IsSafe(str string) bool {
 	return true
 }
 
-func safeRemove(L *lua.LState) int {
-	path := L.ToString(1)
+func SafeRemove(L *lua.LState) int {
+	path := L.CheckString(1)
 	if !IsSafe(path) {
 		L.Push(lua.LFalse)
 		return 1
