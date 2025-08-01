@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -27,11 +26,10 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/klauspost/compress/zstd"
 	"github.com/schollz/progressbar/v3"
 	"golang.org/x/net/ipv4"
 	_ "modernc.org/sqlite"
-
-	"github.com/ulikunitz/xz"
 )
 
 type ConfigTOML struct {
@@ -85,13 +83,19 @@ type Quer1 struct {
 }
 
 type Manifest struct {
-	Name         string   `json:"name"`
-	Version      string   `json:"version"`
-	Description  string   `json:"description"`
-	Dependencies []string `json:"dependencies"`
-	Author       string   `json:"author"`
-	Family       string   `json:"family"`
-	Serial       uint     `json:"serial"`
+	Info struct {
+		Name         string   `toml:"name"`
+		Version      string   `toml:"version"`
+		Description  string   `toml:"description"`
+		Dependencies []string `toml:"dependencies"`
+		Author       string   `toml:"author"`
+		Family       string   `toml:"family"`
+		Serial       uint     `toml:"serial"`
+	} `toml:"Info"`
+	Hooks struct {
+		Install string `toml:"install"`
+		Remove  string `toml:"remove"`
+	} `toml:"Hooks"`
 }
 
 var serialPass uint
@@ -375,7 +379,7 @@ func Install(packagepath string, serial uint) error {
 		log.Panic(err)
 	}
 
-	name := manifest.Name
+	name := manifest.Info.Name
 
 	var destDir = filepath.Join(cfg.Config.DataDir, name)
 
@@ -436,6 +440,7 @@ func Install(packagepath string, serial uint) error {
 				bar.Finish()
 				return err
 			}
+
 			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
 			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
@@ -455,12 +460,12 @@ func Install(packagepath string, serial uint) error {
 
 	counter := &CountingReader{R: f}
 
-	xzr, err := xz.NewReader(counter)
+	zs, err := zstd.NewReader(f)
 	if err != nil {
 		return err
 	}
 
-	tr := tar.NewReader(xzr)
+	tr := tar.NewReader(zs)
 
 	bar := progressbar.NewOptions64(
 		totalsize,
@@ -479,7 +484,6 @@ func Install(packagepath string, serial uint) error {
 		rel := filepath.Clean(hdr.Name)
 
 		if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-			fmt.Println("Ignored :", rel)
 			continue
 		}
 
@@ -528,45 +532,16 @@ func Install(packagepath string, serial uint) error {
 
 	bar.Finish()
 
-	manifest.Serial = serial
-
-	jsonData, err := json.Marshal(manifest)
-	if err != nil {
-		log.Println(err)
-	}
-
-	os.WriteFile(fmt.Sprintf("%s/manifest.json", destDir), jsonData, 0777)
-
-	script := fmt.Sprintf("%s/postinstall.sh", destDir)
-
-	os.Chmod(script, 0777)
-	os.Chmod(fmt.Sprintf("%s/remove.sh", destDir), 0777)
-
-	fmt.Println("\nMaking post install configuration...")
-	cmd := exec.Command(script)
-
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("PACKETS_PACKAGE_DIR=%s", cfg.Config.DataDir),
-		fmt.Sprintf("PACKETS_PACKAGE_BIN_DIR=%s", cfg.Config.BinDir),
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err = cmd.Run()
-
-	if err != nil {
-		log.Println(err)
-		return fmt.Errorf("error exec postinstall script %e", err)
-	}
+	// TODO LUA SCRIPT
 
 	fmt.Printf("Package %s fully installed\n", name)
 
 	var insert = Installed{
-		Realname:     manifest.Name,
-		Version:      manifest.Version,
-		Dependencies: manifest.Dependencies,
-		Family:       manifest.Family,
-		Serial:       manifest.Serial,
+		Realname:     manifest.Info.Name,
+		Version:      manifest.Info.Version,
+		Dependencies: manifest.Info.Dependencies,
+		Family:       manifest.Info.Family,
+		Serial:       manifest.Info.Serial,
 	}
 
 	if err := AddToInstalledDB(insert); err != nil {
@@ -1331,7 +1306,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		log.Panic(err)
 	}
 
-	name := manifest.Name
+	name := manifest.Info.Name
 
 	fmt.Printf("Unpacking (%s) above (%s)\n", name, og_realname)
 
@@ -1347,12 +1322,12 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	counter := &CountingReader{R: f}
 
-	xzr, err := xz.NewReader(counter)
+	zs, err := zstd.NewReader(f)
 	if err != nil {
 		return err
 	}
 
-	tr := tar.NewReader(xzr)
+	tr := tar.NewReader(zs)
 
 	bar := progressbar.NewOptions64(
 		totalSize,
@@ -1372,7 +1347,6 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		rel := filepath.Clean(hdr.Name)
 
 		if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-			fmt.Println("Ignored :", rel)
 			continue
 		}
 
@@ -1421,45 +1395,19 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	bar.Finish()
 
 	os.Rename(destDir, filepath.Join(cfg.Config.DataDir, name))
+
 	destDir = filepath.Join(cfg.Config.DataDir, name)
 
-	manifest.Serial = serial
+	//TODO manifest.toml things
 
-	jsonData, err := json.Marshal(manifest)
-	if err != nil {
-		log.Println(err)
-	}
-
-	os.WriteFile(filepath.Join(destDir, "manifest.json"), jsonData, 0777)
-
-	script := fmt.Sprintf(filepath.Join(destDir, "postinstall.sh"), destDir)
-
-	os.Chmod(script, 0777)
-	os.Chmod(fmt.Sprintf(filepath.Join(destDir, "remove.sh"), destDir), 0777)
-
-	fmt.Println("Making post install configuration...")
-	cmd := exec.Command(script)
-
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("PACKETS_PACKAGE_DIR=%s", cfg.Config.DataDir),
-		fmt.Sprintf("PACKETS_PACKAGE_BIN_DIR=%s", cfg.Config.BinDir),
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err = cmd.Run()
-	if err != nil {
-		return fmt.Errorf("error exec postinstall script %e", err)
-	}
-
-	fmt.Printf("Package %s fully installed you maybe run: \"source ~/.bashrc \"\n", name)
+	fmt.Printf("Package %s fully installed", name)
 
 	var insert = Installed{
-		Realname:     manifest.Name,
-		Version:      manifest.Version,
-		Dependencies: manifest.Dependencies,
-		Family:       manifest.Family,
-		Serial:       manifest.Serial,
+		Realname:     manifest.Info.Name,
+		Version:      manifest.Info.Version,
+		Dependencies: manifest.Info.Dependencies,
+		Family:       manifest.Info.Family,
+		Serial:       manifest.Info.Serial,
 	}
 
 	_, err = db.Exec("DELETE FROM packages WHERE realname =  ?", og_realname)

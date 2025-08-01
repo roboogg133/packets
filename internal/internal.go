@@ -2,14 +2,14 @@ package internal
 
 import (
 	"archive/tar"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/ulikunitz/xz"
+	"github.com/BurntSushi/toml"
+	"github.com/klauspost/compress/zstd"
 )
 
 type ConfigTOML struct {
@@ -25,13 +25,19 @@ type ConfigTOML struct {
 }
 
 type Manifest struct {
-	Name         string   `json:"name"`
-	Version      string   `json:"version"`
-	Description  string   `json:"description"`
-	Dependencies []string `json:"dependencies"`
-	Author       string   `json:"author"`
-	Family       string   `json:"family"`
-	Serial       uint     `json:"serial"`
+	Info struct {
+		Name         string   `toml:"name"`
+		Version      string   `toml:"version"`
+		Description  string   `toml:"description"`
+		Dependencies []string `toml:"dependencies"`
+		Author       string   `toml:"author"`
+		Family       string   `toml:"family"`
+		Serial       uint     `toml:"serial"`
+	} `toml:"Info"`
+	Hooks struct {
+		Install string `toml:"install"`
+		Remove  string `toml:"remove"`
+	} `toml:"Hooks"`
 }
 
 func PacketsPackageDir() string {
@@ -52,15 +58,16 @@ func ManifestReadXZ(path string) (*Manifest, error) {
 	}
 	defer f.Close()
 
-	xzr, err := xz.NewReader(f)
+	zr, err := zstd.NewReader(f)
 	if err != nil {
 		return nil, err
 	}
+	defer zr.Close()
 
-	tr := tar.NewReader(xzr)
+	tarReader := tar.NewReader(zr)
 
 	for {
-		hdr, err := tr.Next()
+		header, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		}
@@ -68,17 +75,18 @@ func ManifestReadXZ(path string) (*Manifest, error) {
 			return nil, err
 		}
 
-		if strings.HasSuffix(hdr.Name, "/manifest.json") || hdr.Name == "manifest.json" {
+		if header.Name == "/manifest.toml" || header.Name == "manifest.toml" {
+			decoder := toml.NewDecoder(tarReader)
 
 			var manifest Manifest
-			decoder := json.NewDecoder(tr)
-			if err := decoder.Decode(&manifest); err != nil {
-				return nil, err
-			}
+
+			decoder.Decode(manifest)
+
 			return &manifest, nil
 		}
+
 	}
-	return nil, fmt.Errorf("can't find manifest.json")
+	return nil, fmt.Errorf("can't find manifest.toml")
 }
 
 func DefaultConfigTOML() *ConfigTOML {
