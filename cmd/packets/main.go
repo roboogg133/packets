@@ -28,6 +28,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/klauspost/compress/zstd"
 	"github.com/schollz/progressbar/v3"
+	lua "github.com/yuin/gopher-lua"
 	"golang.org/x/net/ipv4"
 	_ "modernc.org/sqlite"
 )
@@ -533,6 +534,16 @@ func Install(packagepath string, serial uint) error {
 	bar.Finish()
 
 	// TODO LUA SCRIPT
+
+	L := lua.NewState()
+	defer L.Close()
+
+	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
+	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
+
+	if err := L.DoFile(manifest.Hooks.Install); err != nil {
+		log.Panic(err)
+	}
 
 	fmt.Printf("Package %s fully installed\n", name)
 

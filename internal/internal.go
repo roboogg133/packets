@@ -6,10 +6,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/klauspost/compress/zstd"
+	lua "github.com/yuin/gopher-lua"
 )
 
 type ConfigTOML struct {
@@ -80,7 +82,7 @@ func ManifestReadXZ(path string) (*Manifest, error) {
 
 			var manifest Manifest
 
-			decoder.Decode(manifest)
+			decoder.Decode(&manifest)
 
 			return &manifest, nil
 		}
@@ -116,4 +118,86 @@ func DefaultConfigTOML() *ConfigTOML {
 		return &cfg
 	}
 
+}
+
+func IsSafe(str string) bool {
+	s, err := filepath.EvalSymlinks(filepath.Clean(str))
+	if err != nil {
+		return false
+	}
+	var cfg ConfigTOML
+	toml.DecodeFile(filepath.Join(PacketsPackageDir(), "config.toml"), &cfg)
+
+	if strings.HasPrefix(s, cfg.Config.DataDir) || strings.HasPrefix(s, cfg.Config.BinDir) {
+		return true
+
+	} else if strings.Contains(s, ".ssh") {
+		return false
+
+	} else if strings.HasPrefix(s, "/etc") {
+		return false
+
+	} else if strings.HasPrefix(s, "/usr") || strings.HasPrefix(s, "/bin") {
+
+		return strings.HasPrefix(s, "/usr/share")
+
+	} else if strings.HasPrefix(s, "/var/mail") {
+		return false
+
+	} else if strings.HasPrefix(s, "/proc") {
+		return false
+
+	} else if strings.HasPrefix(s, "/sys") {
+		return false
+
+	} else if strings.HasPrefix(s, "/var/run") || strings.HasPrefix(s, "/run") {
+		return false
+
+	} else if strings.HasPrefix(s, "/tmp") {
+		return false
+
+	} else if strings.HasPrefix(s, "/dev") {
+		return false
+
+	} else if strings.HasPrefix(s, "/boot") {
+		return false
+
+	} else if strings.HasPrefix(s, "/home") {
+		if strings.Contains(s, "/Pictures") || strings.Contains(s, "/Videos") || strings.Contains(s, "/Documents") || strings.Contains(s, "/Downloads") {
+			return false
+		}
+
+	} else if strings.HasPrefix(s, "/lib") || strings.HasPrefix(s, "/lib64") || strings.HasPrefix(s, "/var/lib64") || strings.HasPrefix(s, "/lib") {
+		return false
+
+	} else if strings.HasPrefix(s, "/sbin") {
+		return false
+
+	} else if strings.HasPrefix(s, "/srv") {
+		return false
+
+	} else if strings.HasPrefix(s, "/mnt") {
+		return false
+
+	} else if strings.HasPrefix(s, "/media") {
+		return false
+	} else if strings.HasPrefix(s, "/snap") {
+		return false
+	}
+
+	return true
+}
+
+func safeRemove(L *lua.LState) int {
+	path := L.CheckString(1)
+	if !strings.HasPrefix(path, safeBase) {
+		L.Push(lua.LString("acesso negado"))
+		return 1
+	}
+	err := os.Remove(path)
+	if err != nil {
+		L.Push(lua.LString(err.Error()))
+		return 1
+	}
+	return 0
 }

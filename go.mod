@@ -4,8 +4,9 @@ go 1.24.4
 
 require (
 	github.com/BurntSushi/toml v1.5.0
+	github.com/klauspost/compress v1.18.0
 	github.com/schollz/progressbar/v3 v3.18.0
-	github.com/ulikunitz/xz v0.5.12
+	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/net v0.41.0
 	modernc.org/sqlite v1.38.0
 )
