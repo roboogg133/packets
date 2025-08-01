@@ -437,7 +437,7 @@ func Install(packagepath string, serial uint) error {
 				return err
 			}
 			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
-
+			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
 		}
 	}
@@ -1009,6 +1009,7 @@ func Sync(url string) error {
 			return err
 		}
 		f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+		os.Remove(cfg.Config.LastDataDir)
 
 	case "y":
 		if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
@@ -1060,7 +1061,7 @@ func Sync(url string) error {
 			return err
 		}
 		f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
-
+		os.Remove(cfg.Config.LastDataDir)
 		bar.Finish()
 
 	default:
@@ -1320,6 +1321,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 			}
 
 			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
 		}
 	}
