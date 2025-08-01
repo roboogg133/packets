@@ -120,7 +120,7 @@ func main() {
 		if err := encoder.Encode(cfg); err != nil {
 			log.Fatal(err)
 		}
-		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir")
+		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
 		fmt.Println("Operation Sucess!")
 	}
 
@@ -436,6 +436,8 @@ func Install(packagepath string, serial uint) error {
 				bar.Finish()
 				return err
 			}
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+
 			bar.Finish()
 		}
 	}
@@ -1006,6 +1008,7 @@ func Sync(url string) error {
 		if err != nil {
 			return err
 		}
+		f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
 
 	case "y":
 		if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
@@ -1053,8 +1056,11 @@ func Sync(url string) error {
 
 		err = encoder.Encode(cfg)
 		if err != nil {
+			bar.Finish()
 			return err
 		}
+		f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+
 		bar.Finish()
 
 	default:
@@ -1312,6 +1318,8 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 				bar.Finish()
 				return err
 			}
+
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
 			bar.Finish()
 		}
 	}
@@ -1323,7 +1331,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	name := manifest.Name
 
-	fmt.Printf("Unpacking (%s) above (%s)\n", og_realname, name)
+	fmt.Printf("Unpacking (%s) above (%s)\n", name, og_realname)
 
 	var destDir = filepath.Join(cfg.Config.DataDir, og_realname)
 
