@@ -104,12 +104,12 @@ Downloads package via HTTP if not found on LAN.
 
 To ensure security, only a limited set of safe functions are exposed in Lua hooks:
 
-os.remove(path)
-os.rename(old, new)
-os.copy(source, target)
-os.symlink(source, target)
-io.open(path, mode)
-path_join(...)  -- Safely join path segments
+    os.remove(path)
+    os.rename(old, new)
+    os.copy(source, target)
+    os.symlink(source, target)
+    io.open(path, mode)
+    path_join(...)  -- Safely join path segments
 
 ### Note: Dangerous functions like os.execute, os.getenv, etc. are removed.
 ## 🗃️ Databases
@@ -118,7 +118,7 @@ path_join(...)  -- Safely join path segments
 
     installed.db: Packages currently installed
 
-#⚠️ Restrictions & Notes
+# ⚠️ Restrictions & Notes
 
     Linux only (//go:build linux)
 
