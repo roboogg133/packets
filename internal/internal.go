@@ -366,3 +366,22 @@ func Ljoin(L *lua.LState) int {
 	L.Push(lua.LString(result))
 	return 1
 }
+
+func LMkdir(L *lua.LState) int {
+	path := L.CheckString(1)
+	perm := L.CheckInt(2)
+
+	if !IsSafe(path) {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] unsafe filepath\n"))
+	}
+
+	if err := os.MkdirAll(path, os.FileMode(perm)); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] mkdir failed\n" + err.Error()))
+	}
+
+	L.Push(lua.LTrue)
+	L.Push(lua.LNil)
+	return 2
+}

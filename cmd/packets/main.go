@@ -546,6 +546,7 @@ func Install(packagepath string, serial uint) error {
 	osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
 	osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
 	osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
+	osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
 
 	ioObject.RawSetString("input", lua.LNil)
 	ioObject.RawSetString("output", lua.LNil)
@@ -1196,6 +1197,7 @@ func Unninstall(realname string) error {
 	osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
 	osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
 	osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
+	osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
 
 	ioObject.RawSetString("input", lua.LNil)
 	ioObject.RawSetString("output", lua.LNil)
@@ -1474,6 +1476,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
 	osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
 	osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
+	osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
 
 	ioObject.RawSetString("input", lua.LNil)
 	ioObject.RawSetString("output", lua.LNil)
