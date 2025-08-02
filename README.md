@@ -33,12 +33,14 @@
 
 # Available Commands
 
-`packets install <name>`	    Install a package (resolves dependencies, executes Lua install hook)
-`packets remove <name>`	        Remove a package (executes Lua remove hook)
-`packets upgrade <name>`	    Upgrade a package by checking family and serial in the manifest
-`packets sync [url]`	        Synchronize index.db from remote HTTP source
-`packets serve init|stop`       Starts and stop the LAN service daemon
-`packets list`	                List all installed packages
+| Command                   | Description                                                                |
+|---------------------------|----------------------------------------------------------------------------|
+|`packets install <name>`	|    Install a package (resolves dependencies, executes Lua install hook)    |
+|`packets remove <name>`	|    Remove a package (executes Lua remove hook)                             |
+|`packets upgrade <name>`	|    Upgrade a package by checking family and serial in the manifest         |
+|`packets sync [url]`	    |    Synchronize index.db from remote HTTP source                            |
+|`packets serve init/stop`  |    Starts and stop the LAN service daemon                                  |
+|`packets list`	            |    List all installed packages                                             |
 
 # 📦 Package Format
 
@@ -65,7 +67,7 @@ serial = 0
 install = "install.lua"
 remove = "remove.lua"```
 
-
+--
 # 🔄 Installation Process
 
     Check if package is already cached and validated via SHA-256.
