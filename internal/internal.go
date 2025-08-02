@@ -77,7 +77,7 @@ func ManifestReadXZ(path string) (*Manifest, error) {
 			return nil, err
 		}
 
-		if header.Name == "/manifest.toml" || header.Name == "manifest.toml" {
+		if filepath.Base(header.Name) == "manifest.toml" {
 			decoder := toml.NewDecoder(tarReader)
 
 			var manifest Manifest
@@ -347,7 +347,17 @@ func SafeOpen(L *lua.LState) int {
 	return 2
 }
 
-func safeLines(L *lua.LState) int {
+func Ljoin(L *lua.LState) int {
 
-	return 2
+	n := L.GetTop()
+	parts := make([]string, 0, n)
+
+	for i := 1; i <= n; i++ {
+		val := L.Get(i)
+		parts = append(parts, val.String())
+	}
+
+	result := filepath.Join(parts...)
+	L.Push(lua.LString(result))
+	return 1
 }
