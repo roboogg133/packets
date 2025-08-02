@@ -124,17 +124,15 @@ func DefaultConfigTOML() *ConfigTOML {
 }
 
 func IsSafe(str string) bool {
-	s, err := filepath.EvalSymlinks(strings.TrimSpace(filepath.Clean(str)))
+	s, err := filepath.EvalSymlinks(filepath.Clean(str))
 	if err != nil {
-		return false
+		s = filepath.Clean(str)
 	}
+
 	var cfg ConfigTOML
 	toml.DecodeFile(filepath.Join(PacketsPackageDir(), "config.toml"), &cfg)
 
-	fmt.Println("[DEBUG] verificando segurança de", s)
-	fmt.Println("[DEBUG] dataDir =", cfg.Config.DataDir, "binDir =", cfg.Config.BinDir)
-
-	if strings.HasPrefix(s, strings.TrimSpace(cfg.Config.DataDir)) || strings.HasPrefix(s, strings.TrimSpace(cfg.Config.BinDir)) {
+	if strings.HasPrefix(s, cfg.Config.DataDir) || strings.HasPrefix(s, cfg.Config.BinDir) {
 		return true
 
 	} else if strings.Contains(s, ".ssh") {
@@ -144,7 +142,7 @@ func IsSafe(str string) bool {
 		return false
 
 	} else if strings.HasPrefix(s, "/usr") || strings.HasPrefix(s, "/bin") {
-
+		fmt.Println(s, "está dentro de usr")
 		return strings.HasPrefix(s, "/usr/share")
 
 	} else if strings.HasPrefix(s, "/var/mail") {
