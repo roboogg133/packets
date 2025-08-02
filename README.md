@@ -132,7 +132,8 @@ To ensure security, only a limited set of safe functions are exposed in Lua hook
     os.copy(source, target)
     os.symlink(source, target)
     io.open(path, mode)
-    path_join(...)  -- Safely join path segments
+    os.mkdir(path, filemode)
+    path_join(...) 
 
 ### Note: Dangerous functions like os.execute, os.getenv, etc. are removed.
 ## 🗃️ Databases
