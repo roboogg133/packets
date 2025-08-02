@@ -100,6 +100,28 @@ Downloads package via HTTP if not found on LAN.
 
     Safe, sandboxed Lua runtime with limited API
 
+
+# 🌍 Global Variables Available in Lua Scripts
+
+During the execution of install.lua and remove.lua hooks, some global variables are automatically provided to the Lua environment. These help simplify file path handling and access to package-specific directories.
+## Available variables:
+
+|Name	             |Type	  |  Description
+|--------------------|--------|--------------------------------------------------------------------------|
+|packets_package_dir |	string|	Absolute path to the package's data directory (e.g., /opt/packets/...)   |packets_bin_dir      |  string|	Path where executables should be installed (e.g., /usr/bin)            |
+|script              |  string|	Path to the currently executing script (e.g., "install.lua")             |
+|data_dir            |  string|	Path to the /data folder of the current package                          |
+### Example usage in Lua:
+
+        print("Installing into: " .. packets_bin_dir)
+        print("Package data in: " .. data_dir)
+
+        -- Copy a binary to /usr/bin
+        os.copy(path_join(data_dir, "htop"), path_join(packets_bin_dir, "htop"))
+
+These variables are preloaded in the Lua environment—no need to manually declare or initialize them.
+
+
 ## 🛠️ Allowed Lua API (install/remove hooks)
 
 To ensure security, only a limited set of safe functions are exposed in Lua hooks:
