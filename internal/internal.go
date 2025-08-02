@@ -199,10 +199,11 @@ func SafeRemove(L *lua.LState) int {
 	if err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] remove failed\n" + err.Error()))
-		return 1
+		return 2
 	}
 	L.Push(lua.LTrue)
-	return 1
+	L.Push(lua.LNil)
+	return 2
 }
 
 func SafeRename(L *lua.LState) int {
@@ -334,7 +335,7 @@ func SafeOpen(L *lua.LState) int {
 	file, err := os.OpenFile(path, modeFlags(mode), 0644)
 	if err != nil {
 		L.Push(lua.LNil)
-		L.Push(lua.LString(err.Error()))
+		L.Push(lua.LString("[packets] open failed\n" + err.Error()))
 		return 2
 	}
 

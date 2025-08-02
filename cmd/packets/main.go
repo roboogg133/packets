@@ -541,6 +541,7 @@ func Install(packagepath string, serial uint) error {
 
 	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
+	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
 	osObject.RawSetString("execute", lua.LNil)
 	osObject.RawSetString("exit", lua.LNil)
 	osObject.RawSetString("getenv", lua.LNil)
