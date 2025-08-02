@@ -199,7 +199,7 @@ func SafeRemove(L *lua.LState) int {
 		L.Push(lua.LString("[packets] unsafe filepath"))
 		return 2
 	}
-	err := os.Remove(filename)
+	err := os.RemoveAll(filename)
 	if err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] remove failed\n" + err.Error()))
