@@ -44,7 +44,7 @@
 
 Packages must be compressed as .tar.zst and include:
 
-.
+
 ├── manifest.toml       # Package metadata
 ├── data/               # Files to install
 ├── install.lua         # Lua install hook
@@ -52,7 +52,7 @@ Packages must be compressed as .tar.zst and include:
 
 
 ## Example manifest.toml
-``[Info]
+```[Info]
 name = "packets"
 version = "1.0.0"
 description = "offline and online packetmanager"
@@ -63,7 +63,7 @@ serial = 0
 
 [Hooks]
 install = "install.lua"
-remove = "remove.lua"``
+remove = "remove.lua"```
 
 
 # 🔄 Installation Process
