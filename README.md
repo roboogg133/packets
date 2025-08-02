@@ -54,33 +54,33 @@ Packages must be compressed as .tar.zst and include:
 
 
 ## Example manifest.toml
-``[Info]
-name = "packets"
-version = "1.0.0"
-description = "offline and online packetmanager"
-dependencies = []
-author = "robo"
-family = "1f84ca15-5077-4f1d-a370-0ec860766eb2"
-serial = 0
+    [Info]
+     name = "packets"
+     version = "1.0.0"
+     description = "offline and online packetmanager"
+     dependencies = []
+     author = "robo"
+     family = "1f84ca15-5077-4f1d-a370-0ec860766eb2"
+     serial = 0
 
-[Hooks]
-install = "install.lua"
-remove = "remove.lua"``
+    [Hooks]
+     install = "install.lua"
+     remove = "remove.lua"
 
 --
 # 🔄 Installation Process
 
-    Check if package is already cached and validated via SHA-256.
+- Check if package is already cached and validated via SHA-256.
 
-    If not, search the package:
+- If not, search the package:
 
-        Via LAN: Sends UDP broadcast (Q:filename) to peers.
+-   Via LAN: Sends UDP broadcast (Q:filename) to peers.
 
-        Via HTTP: Downloads from configured mirrors.
+-   Via HTTP: Downloads from configured mirrors.
 
-    Decompress .tar.zst, install files.
+-   Decompress .tar.zst, install files.
 
-    Execute Lua install hook.
+-   Execute Lua install hook.
 
 # 🧩 Core Features
 ✅ Dependency Resolution
