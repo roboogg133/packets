@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -82,7 +83,9 @@ func ManifestReadXZ(path string) (*Manifest, error) {
 
 			var manifest Manifest
 
-			decoder.Decode(&manifest)
+			if _, err := decoder.Decode(&manifest); err != nil {
+				log.Fatal(err)
+			}
 
 			return &manifest, nil
 		}
@@ -121,14 +124,17 @@ func DefaultConfigTOML() *ConfigTOML {
 }
 
 func IsSafe(str string) bool {
-	s, err := filepath.EvalSymlinks(filepath.Clean(str))
+	s, err := filepath.EvalSymlinks(strings.TrimSpace(filepath.Clean(str)))
 	if err != nil {
 		return false
 	}
 	var cfg ConfigTOML
 	toml.DecodeFile(filepath.Join(PacketsPackageDir(), "config.toml"), &cfg)
 
-	if strings.HasPrefix(s, cfg.Config.DataDir) || strings.HasPrefix(s, cfg.Config.BinDir) {
+	fmt.Println("[DEBUG] verificando segurança de", s)
+	fmt.Println("[DEBUG] dataDir =", cfg.Config.DataDir, "binDir =", cfg.Config.BinDir)
+
+	if strings.HasPrefix(s, strings.TrimSpace(cfg.Config.DataDir)) || strings.HasPrefix(s, strings.TrimSpace(cfg.Config.BinDir)) {
 		return true
 
 	} else if strings.Contains(s, ".ssh") {
@@ -297,6 +303,7 @@ func SymbolicLua(L *lua.LState) int {
 	if err := os.Symlink(fileName, destination); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] symlink failed\n" + err.Error()))
+		return 2
 	}
 
 	L.Push(lua.LTrue)

@@ -454,23 +454,19 @@ func Install(packagepath string, serial uint) error {
 	}
 	defer f.Close()
 
-	stat, _ := f.Stat()
-
-	totalsize := stat.Size()
-
-	counter := &CountingReader{R: f}
-
 	zs, err := zstd.NewReader(f)
 	if err != nil {
 		return err
 	}
+	defer zs.Close()
 
 	tr := tar.NewReader(zs)
 
 	bar := progressbar.NewOptions64(
-		totalsize,
+		-1,
 		progressbar.OptionSetDescription("[2/2] Unpacking ..."),
 		progressbar.OptionSetWriter(os.Stdout),
+		progressbar.OptionClearOnFinish(),
 	)
 	for {
 		hdr, err := tr.Next()
@@ -513,13 +509,12 @@ func Install(packagepath string, serial uint) error {
 				return err
 			}
 
-			_, err = io.Copy(io.MultiWriter(out), tr)
+			n, err := io.Copy(out, tr)
 			out.Close()
 			if err != nil {
 				return err
 			}
-
-			bar.Set(int(counter.Total))
+			bar.Add64(n)
 
 			err = os.Chmod(absPath, os.FileMode(hdr.Mode))
 			if err != nil {
@@ -562,7 +557,7 @@ func Install(packagepath string, serial uint) error {
 	ioObject.RawSetString("lines", lua.LNil)
 	ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
 
-	if err := L.DoFile(manifest.Hooks.Install); err != nil {
+	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, name, manifest.Hooks.Install)); err != nil {
 		log.Panic(err)
 	}
 
@@ -994,120 +989,121 @@ func Sync(url string) error {
 		fmt.Printf("Ooops... Data directory has been changed on %s do you want to move the packages from (%s), to (%s)\n", filepath.Join(PacketsDir, "config.toml"), cfg.Config.LastDataDir, cfg.Config.DataDir)
 		fmt.Println("What you want to do?")
 		fmt.Println("[y] Yes [n] No, [x] Ignore it and stop to show this message (not recommended)")
-	}
-	var answer string
-	fmt.Scanln(&answer)
 
-	switch answer {
-	case "n":
-		fmt.Println("Just ignoring...")
+		var answer string
+		fmt.Scanln(&answer)
 
-	case "x":
-		f, err := os.OpenFile(filepath.Join(PacketsDir, "config.toml"), os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
+		switch answer {
+		case "n":
+			fmt.Println("Just ignoring...")
 
-		cfg.Config.LastDataDir = cfg.Config.DataDir
-
-		encoder := toml.NewEncoder(f)
-
-		err = encoder.Encode(cfg)
-		if err != nil {
-			return err
-		}
-		f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
-		os.Remove(cfg.Config.LastDataDir)
-
-	case "y":
-		if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
-			return err
-		}
-
-		bar := progressbar.NewOptions64(-1,
-			progressbar.OptionSetDescription("Moving ..."),
-		)
-
-		err := filepath.WalkDir(cfg.Config.LastDataDir, func(last string, d fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-
-			if last == cfg.Config.LastDataDir {
-				return nil
-			}
-
-			rel, err := filepath.Rel(cfg.Config.LastDataDir, last)
+		case "x":
+			f, err := os.OpenFile(filepath.Join(PacketsDir, "config.toml"), os.O_WRONLY, 0644)
 			if err != nil {
 				return err
 			}
-			dest := filepath.Join(cfg.Config.DataDir, rel)
 
-			if d.IsDir() {
-				return os.MkdirAll(dest, 0755)
+			cfg.Config.LastDataDir = cfg.Config.DataDir
+
+			encoder := toml.NewEncoder(f)
+
+			err = encoder.Encode(cfg)
+			if err != nil {
+				return err
+			}
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+			os.Remove(cfg.Config.LastDataDir)
+
+		case "y":
+			if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
+				return err
 			}
 
-			return os.Rename(last, dest)
+			bar := progressbar.NewOptions64(-1,
+				progressbar.OptionSetDescription("Moving ..."),
+			)
 
-		})
-		if err != nil {
-			return err
-		}
+			err := filepath.WalkDir(cfg.Config.LastDataDir, func(last string, d fs.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
 
-		f, err := os.OpenFile(filepath.Join(PacketsDir, "config.toml"), os.O_WRONLY, 0644)
-		if err != nil {
-			return err
-		}
+				if last == cfg.Config.LastDataDir {
+					return nil
+				}
 
-		cfg.Config.LastDataDir = cfg.Config.DataDir
+				rel, err := filepath.Rel(cfg.Config.LastDataDir, last)
+				if err != nil {
+					return err
+				}
+				dest := filepath.Join(cfg.Config.DataDir, rel)
 
-		encoder := toml.NewEncoder(f)
+				if d.IsDir() {
+					return os.MkdirAll(dest, 0755)
+				}
 
-		err = encoder.Encode(cfg)
-		if err != nil {
+				return os.Rename(last, dest)
+
+			})
+			if err != nil {
+				return err
+			}
+
+			f, err := os.OpenFile(filepath.Join(PacketsDir, "config.toml"), os.O_WRONLY, 0644)
+			if err != nil {
+				return err
+			}
+
+			cfg.Config.LastDataDir = cfg.Config.DataDir
+
+			encoder := toml.NewEncoder(f)
+
+			err = encoder.Encode(cfg)
+			if err != nil {
+				bar.Finish()
+				return err
+			}
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
-			return err
-		}
-		f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
-		os.Remove(cfg.Config.LastDataDir)
-		bar.Finish()
 
-	default:
-		if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
-			return err
-		}
-
-		bar := progressbar.NewOptions64(-1,
-			progressbar.OptionSetDescription("Moving ..."),
-		)
-
-		err := filepath.WalkDir(cfg.Config.LastDataDir, func(last string, d fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
+		default:
+			if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
+				return err
 			}
 
-			if last == cfg.Config.LastDataDir {
-				return nil
-			}
+			bar := progressbar.NewOptions64(-1,
+				progressbar.OptionSetDescription("Moving ..."),
+			)
 
-			rel, err := filepath.Rel(cfg.Config.LastDataDir, last)
+			err := filepath.WalkDir(cfg.Config.LastDataDir, func(last string, d fs.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+
+				if last == cfg.Config.LastDataDir {
+					return nil
+				}
+
+				rel, err := filepath.Rel(cfg.Config.LastDataDir, last)
+				if err != nil {
+					return err
+				}
+				dest := filepath.Join(cfg.Config.DataDir, rel)
+
+				if d.IsDir() {
+					return os.MkdirAll(dest, 0755)
+				}
+
+				return os.Rename(last, dest)
+
+			})
 			if err != nil {
 				return err
 			}
-			dest := filepath.Join(cfg.Config.DataDir, rel)
+			bar.Finish()
 
-			if d.IsDir() {
-				return os.MkdirAll(dest, 0755)
-			}
-
-			return os.Rename(last, dest)
-
-		})
-		if err != nil {
-			return err
 		}
-		bar.Finish()
-
 	}
 
 	return nil
@@ -1187,7 +1183,7 @@ func Unninstall(realname string) error {
 
 	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
-	L.SetGlobal("script", lua.LString(manifest.Hooks.Remove))
+	L.SetGlobal("script", lua.LString(path.Join(cfg.Config.DataDir, realname, manifest.Hooks.Remove)))
 	L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, realname, "data")))
 
 	L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
@@ -1211,7 +1207,7 @@ func Unninstall(realname string) error {
 	ioObject.RawSetString("lines", lua.LNil)
 	ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
 
-	if err := L.DoFile(manifest.Hooks.Remove); err != nil {
+	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, realname, manifest.Hooks.Remove)); err != nil {
 		log.Panic(err)
 	}
 
@@ -1393,6 +1389,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		totalSize,
 		progressbar.OptionSetDescription("[2/2] Upgrading ..."),
 		progressbar.OptionSetWriter(os.Stdout),
+		progressbar.OptionClearOnFinish(),
 	)
 
 	for {
@@ -1488,11 +1485,11 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	ioObject.RawSetString("lines", lua.LNil)
 	ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
 
-	if err := L.DoFile(manifest.Hooks.Install); err != nil {
+	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, name, manifest.Hooks.Install)); err != nil {
 		log.Panic(err)
 	}
 
-	fmt.Printf("Package %s fully installed", name)
+	fmt.Printf("\nPackage %s fully installed", name)
 
 	var insert = Installed{
 		Realname:     manifest.Info.Name,
