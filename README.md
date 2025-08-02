@@ -108,7 +108,7 @@ During the execution of install.lua and remove.lua hooks, some global variables 
 
 |Name	             |Type	  |  Description
 |--------------------|--------|--------------------------------------------------------------------------|
-|packets_package_dir |	string|	Absolute path to the package's data directory (e.g., /opt/packets/...)   |packets_bin_dir      |  string|	Path where executables should be installed (e.g., /usr/bin)            |
+|packets_package_dir |	string|	Absolute path to the package's data directory (e.g., /opt/packets/...)   |packets_bin_dir      |  string| Path where executables should be installed (e.g., /usr/bin)            |
 |script              |  string|	Path to the currently executing script (e.g., "install.lua")             |
 |data_dir            |  string|	Path to the /data folder of the current package                          |
 ### Example usage in Lua:
