@@ -74,13 +74,13 @@ Packages must be compressed as .tar.zst and include:
 
 - If not, search the package:
 
--   Via LAN: Sends UDP broadcast (Q:filename) to peers.
+    Via LAN: Sends UDP broadcast (Q:filename) to peers.
 
--   Via HTTP: Downloads from configured mirrors.
+    Via HTTP: Downloads from configured mirrors.
 
--   Decompress .tar.zst, install files.
+    Decompress .tar.zst, install files.
 
--   Execute Lua install hook.
+    Execute Lua install hook.
 
 # 🧩 Core Features
 ✅ Dependency Resolution
