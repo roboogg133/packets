@@ -153,3 +153,8 @@ To ensure security, only a limited set of safe functions are exposed in Lua hook
 
     Do not manually edit lastDataDir
 
+
+# TODO
+
+- Auto upgrade all packages available
+- Packets Universe
