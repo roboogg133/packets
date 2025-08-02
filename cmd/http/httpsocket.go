@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"packets/internal"
 
@@ -22,10 +23,10 @@ func main() {
 
 	internal.PacketsPackageDir()
 	var cfg ConfigTOML
-	toml.Decode("opt/packets/packets/config.toml", &cfg)
+	toml.Decode(filepath.Join(internal.PacketsPackageDir(), "config.toml"), &cfg)
 
 	pid := os.Getpid()
-	if err := os.WriteFile("./http.pid", []byte(fmt.Sprint(pid)), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(internal.PacketsPackageDir(), "http.pid"), []byte(fmt.Sprint(pid)), 0644); err != nil {
 		fmt.Println("error saving subprocess pid", err)
 	}
 
