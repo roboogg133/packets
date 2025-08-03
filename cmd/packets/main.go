@@ -125,7 +125,7 @@ func main() {
 		if err := encoder.Encode(cfg); err != nil {
 			log.Fatal(err)
 		}
-		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir\n")
 		fmt.Println("Operation Sucess!")
 	}
 
@@ -364,7 +364,7 @@ func main() {
 			return
 		}
 
-		fmt.Println("founded upgrade")
+		fmt.Println("founded an upgrade")
 		QueryInstall(neo_realname)
 
 	default:
@@ -524,6 +524,31 @@ func Install(packagepath string, serial uint) error {
 
 		}
 	}
+	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+	defer db.Close()
+
+	var familyUuid string
+
+	if err := db.QueryRow("SELECT family FROM packages WHERE realname = ?", name).Scan(&familyUuid); err != nil {
+		return err
+	}
+
+	manifest.Info.Family = familyUuid
+	manifest.Info.Serial = serialPass
+
+	file, err := os.OpenFile(filepath.Join(cfg.Config.DataDir, name, "manifest.toml"), os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := toml.NewEncoder(file)
+
+	encoder.Encode(&manifest)
 
 	L := lua.NewState()
 	defer L.Close()
@@ -563,7 +588,7 @@ func Install(packagepath string, serial uint) error {
 	}
 
 	bar.Finish()
-	fmt.Printf("Package %s fully installed\n", name)
+	fmt.Printf(":: Package %s fully installed\n", name)
 
 	var insert = Installed{
 		Realname:     manifest.Info.Name,
@@ -762,7 +787,7 @@ func QueryInstall(realname string) {
 		u, _ := url.Parse(mirrors)
 		filename := path.Base(u.Path)
 
-		fmt.Println("Checking if the package exists")
+		fmt.Println(":: Checking in cache dir")
 		if CheckDownloaded(filename) {
 			err := Validate(filename, realname)
 			if err != nil {
@@ -779,7 +804,7 @@ func QueryInstall(realname string) {
 			return
 
 		}
-		fmt.Println("Asking in LAN for the package")
+		fmt.Println(":: Asking in LAN for the package")
 		peers := AskLAN(filename)
 		answers := len(peers)
 		if answers != 0 {
@@ -823,7 +848,7 @@ func QueryInstall(realname string) {
 					break
 				}
 			}
-			fmt.Println("Checking for package in LAN")
+			fmt.Println(":: Checking for package in LAN")
 			peers := AskLAN(filename)
 			answers := len(peers)
 			if answers != 0 {
@@ -891,13 +916,14 @@ func Validate(filename string, realname string) error {
 	}
 
 	if hashString != hashStringDB {
-		fmt.Println("tampered package, removing it...\nplease run the command again")
+		fmt.Println("tampered package, removing it...")
 
 		err := os.Remove(filepath.Join(cfg.Config.CacheDir, filename))
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("the package isn't safe, alredy removed")
+		QueryInstall(realname)
+		return nil
 	}
 	return nil
 }
@@ -988,7 +1014,7 @@ func Sync(url string) error {
 
 	if cfg.Config.LastDataDir != cfg.Config.DataDir {
 		fmt.Printf("Ooops... Data directory has been changed on %s do you want to move the packages from (%s), to (%s)\n", filepath.Join(PacketsDir, "config.toml"), cfg.Config.LastDataDir, cfg.Config.DataDir)
-		fmt.Println("What you want to do?")
+		fmt.Println(":: What you want to do?")
 		fmt.Println("[y] Yes [n] No, [x] Ignore it and stop to show this message (not recommended)")
 
 		var answer string
@@ -1012,7 +1038,7 @@ func Sync(url string) error {
 			if err != nil {
 				return err
 			}
-			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir\n")
 			os.Remove(cfg.Config.LastDataDir)
 
 		case "y":
