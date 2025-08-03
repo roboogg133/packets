@@ -1481,6 +1481,32 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	os.Rename(destDir, filepath.Join(cfg.Config.DataDir, name))
 
+	dbx, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+	defer dbx.Close()
+
+	var familyUuid string
+
+	if err := dbx.QueryRow("SELECT family FROM packages WHERE realname = ?", name).Scan(&familyUuid); err != nil {
+		return err
+	}
+
+	manifest.Info.Family = familyUuid
+	manifest.Info.Serial = serialPass
+
+	file, err := os.OpenFile(filepath.Join(cfg.Config.DataDir, name, "manifest.toml"), os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := toml.NewEncoder(file)
+
+	encoder.Encode(&manifest)
+
 	L := lua.NewState()
 	defer L.Close()
 
