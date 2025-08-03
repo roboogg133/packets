@@ -1090,7 +1090,7 @@ func Sync(url string) error {
 				bar.Finish()
 				return err
 			}
-			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir\n")
 			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
 
