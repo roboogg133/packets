@@ -1576,3 +1576,9 @@ func SearchUpgrades(name string) error {
 
 	return nil
 }
+
+/*
+TODO:
+	asyncronous install with goroutines
+	packets search
+*/
