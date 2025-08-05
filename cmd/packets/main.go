@@ -270,9 +270,9 @@ func main() {
 		}
 
 		if len(os.Args) < 3 {
-			fmt.Println("Starting to sync with https://servidordomal.fun/mirror/index.db")
-			if err := Sync("https://servidordomal.fun/mirror/index.db"); err != nil {
-				fmt.Println("failed to sync with https://servidordomal.fun/mirror/index.db : ", err)
+			fmt.Println("Starting to sync with https://servidordomal.fun/index.db")
+			if err := Sync("https://servidordomal.fun/index.db"); err != nil {
+				fmt.Println("failed to sync with https://servidordomal.fun/index.db : ", err)
 				return
 			}
 			fmt.Println("Sucessifully sync!")
