@@ -1211,6 +1211,9 @@ func Unninstall(realname string) error {
 	osObject := L.GetGlobal("os").(*lua.LTable)
 	ioObject := L.GetGlobal("io").(*lua.LTable)
 
+	L.SetGlobal("package", lua.LNil)
+	L.SetGlobal("require", lua.LNil)
+
 	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
 	L.SetGlobal("script", lua.LString(path.Join(cfg.Config.DataDir, realname, manifest.Hooks.Remove)))
@@ -1515,6 +1518,9 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 	osObject := L.GetGlobal("os").(*lua.LTable)
 	ioObject := L.GetGlobal("io").(*lua.LTable)
+
+	L.SetGlobal("package", lua.LNil)
+	L.SetGlobal("require", lua.LNil)
 
 	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
