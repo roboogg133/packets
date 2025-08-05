@@ -831,7 +831,7 @@ func QueryInstall(realname string) {
 			u, _ := url.Parse(v)
 			filename := path.Base(u.Path)
 
-			fmt.Printf("Checking for %s", filename)
+			fmt.Printf("Checking for %s\n", filename)
 			if CheckDownloaded(filename) {
 				err := Validate(filename, realname)
 				if err != nil {
