@@ -220,9 +220,6 @@ func SafeRename(L *lua.LState) int {
 		return 2
 	}
 
-	if _, err := os.Stat(newname); err == nil {
-		os.RemoveAll(newname)
-	}
 	if err := os.Rename(oldname, newname); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] rename failed\n" + err.Error()))
@@ -265,9 +262,7 @@ func SafeCopy(L *lua.LState) int {
 		return 2
 	}
 
-	if _, err := os.Stat(newname); err == nil {
-		os.RemoveAll(newname)
-	}
+	os.RemoveAll(newname)
 
 	dst, err := os.Create(newname)
 	if err != nil {
@@ -305,10 +300,7 @@ func SymbolicLua(L *lua.LState) int {
 		return 2
 	}
 
-	if _, err := os.Stat(destination); err == nil {
-		os.RemoveAll(destination)
-	}
-
+	_ = os.RemoveAll(destination)
 	if err := os.Symlink(fileName, destination); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] symlink failed\n" + err.Error()))
