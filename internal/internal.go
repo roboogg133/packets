@@ -262,8 +262,6 @@ func SafeCopy(L *lua.LState) int {
 		return 2
 	}
 
-	os.RemoveAll(newname)
-
 	dst, err := os.Create(newname)
 	if err != nil {
 		L.Push(lua.LFalse)
