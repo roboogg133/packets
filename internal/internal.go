@@ -264,9 +264,18 @@ func SafeCopy(L *lua.LState) int {
 
 	dst, err := os.Create(newname)
 	if err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
-		return 2
+		if !os.IsExist(err) {
+			dst, err = os.Open(newname)
+			if err != nil {
+				L.Push(lua.LFalse)
+				L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+				return 2
+			}
+		} else {
+			L.Push(lua.LFalse)
+			L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+			return 2
+		}
 	}
 
 	defer dst.Close()
