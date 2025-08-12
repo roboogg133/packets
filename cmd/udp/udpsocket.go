@@ -14,8 +14,8 @@ import (
 
 type ConfigTOML struct {
 	Config struct {
-		DefaultHttpPort int    `toml:"httpPort"`
-		DefaultCacheDir string `toml:"cacheDir"`
+		HttpPort int    `toml:"httpPort"`
+		CacheDir string `toml:"cacheDir"`
 	} `toml:"Config"`
 }
 
@@ -23,7 +23,7 @@ var cfg ConfigTOML
 
 func CheckDownloaded(filename string) bool {
 
-	_, err := os.Stat(filepath.Join(cfg.Config.DefaultCacheDir))
+	_, err := os.Stat(filepath.Join(cfg.Config.CacheDir))
 	if os.IsNotExist(err) {
 		return false
 	} else {
@@ -58,7 +58,7 @@ func main() {
 		}
 		filename := strings.TrimPrefix(msg, "Q:")
 		if CheckDownloaded(filename) {
-			reply := fmt.Sprintf("H:%s:%d", filename, 9123)
+			reply := fmt.Sprintf("H:%s:%d", filename, cfg.Config.HttpPort)
 			conn.WriteToUDP([]byte(reply), remote)
 		}
 	}
