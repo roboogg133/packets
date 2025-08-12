@@ -28,6 +28,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/klauspost/compress/zstd"
 	"github.com/schollz/progressbar/v3"
+	"github.com/spf13/cobra"
 	lua "github.com/yuin/gopher-lua"
 	"golang.org/x/net/ipv4"
 	_ "modernc.org/sqlite"
@@ -103,53 +104,18 @@ var serialPass uint
 var cfg ConfigTOML
 var PacketsDir string
 
-func main() {
+var isUpgrade bool
+var upgradeHelper string
 
-	PacketsDir = internal.PacketsPackageDir()
+var rootCmd = &cobra.Command{Use: "packets"}
 
-	_, err := os.Stat(filepath.Join(PacketsDir, "config.toml"))
-	if os.IsNotExist(err) {
-		fmt.Println("can't find config.toml, generating a default one")
-
-		os.MkdirAll(PacketsDir, 0644)
-		file, err := os.Create(filepath.Join(PacketsDir, "config.toml"))
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-
-		cfg := internal.DefaultConfigTOML()
-
-		encoder := toml.NewEncoder(file)
-
-		if err := encoder.Encode(cfg); err != nil {
-			log.Fatal(err)
-		}
-		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir\n")
-		fmt.Println("Operation Sucess!")
-	}
-
-	_, err = toml.DecodeFile(filepath.Join(PacketsDir, "config.toml"), &cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if len(os.Args) < 2 {
-		fmt.Println("invalid syntax")
-		return
-	}
-
-	cmd := os.Args[1]
-
-	switch cmd {
-	case "install":
+var installCmd = &cobra.Command{
+	Use:   "install {package} [packages...]",
+	Short: "Install a package",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
 		if os.Getuid() != 0 {
 			fmt.Println("please, run as root")
-			return
-		}
-
-		if len(os.Args) < 3 {
-			fmt.Println("usage: packets install <name>")
 			return
 		}
 
@@ -160,7 +126,7 @@ func main() {
 		}
 		defer db.Close()
 
-		nameToQuery := os.Args[2]
+		nameToQuery := args[0]
 		var exist bool
 		db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE realname = ?  LIMIT 1)", nameToQuery).Scan(&exist)
 		if exist {
@@ -215,61 +181,63 @@ func main() {
 			QueryInstall(pkgs[choice].Realname)
 			return
 		}
+	},
+}
 
-	case "serve":
+var serve = &cobra.Command{
+	Use:   "serve",
+	Short: "Start or stops the packets daemon",
+}
+
+var serveInit = &cobra.Command{
+	Use:   "init",
+	Short: "Starts the packets daemon",
+	Run: func(cmd *cobra.Command, args []string) {
+		var sockets [2]string
+		sockets[0] = filepath.Join(PacketsDir, "udpsocket")
+		sockets[1] = filepath.Join(PacketsDir, "httpsocket")
+
+		for _, v := range sockets {
+			abs, _ := filepath.Abs(v)
+			cmd := exec.Command(abs)
+			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+			if err := cmd.Start(); err != nil {
+				log.Fatalf("failed to start %s: %v", v, err)
+			}
+
+		}
+	},
+}
+var serveStop = &cobra.Command{
+	Use:   "stop",
+	Short: "Stops the packets daemon",
+	Run: func(cmd *cobra.Command, args []string) {
+		var pidfiles [2]string
+		pidfiles[0] = filepath.Join(PacketsDir, "http.pid")
+		pidfiles[1] = filepath.Join(PacketsDir, "udp.pid")
+
+		for _, v := range pidfiles {
+			data, err := os.ReadFile(v)
+			if err != nil {
+				fmt.Println("cant read PID:", err)
+				return
+			}
+			pid, _ := strconv.Atoi(string(data))
+			syscall.Kill(pid, syscall.SIGTERM)
+		}
+	},
+}
+
+var syncCmd = &cobra.Command{
+	Use:   "sync [url]",
+	Short: "Syncronizes with an remote index.db, and check if the data dir is changed",
+	Run: func(cmd *cobra.Command, args []string) {
 		if os.Getuid() != 0 {
 			fmt.Println("please, run as root")
 			return
 		}
 
-		if len(os.Args) < 3 {
-			fmt.Println("usage: packets serve <option>\navaiable options: init, stop")
-			return
-		}
-		switch os.Args[2] {
-		case "init":
-
-			var sockets [2]string
-			sockets[0] = filepath.Join(PacketsDir, "udpsocket")
-			sockets[1] = filepath.Join(PacketsDir, "httpsocket")
-
-			for _, v := range sockets {
-				abs, _ := filepath.Abs(v)
-				cmd := exec.Command(abs)
-				cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-				if err := cmd.Start(); err != nil {
-					log.Fatalf("failed to start %s: %v", v, err)
-				}
-
-			}
-			return
-
-		case "stop":
-
-			var pidfiles [2]string
-			pidfiles[0] = filepath.Join(PacketsDir, "http.pid")
-			pidfiles[1] = filepath.Join(PacketsDir, "udp.pid")
-
-			for _, v := range pidfiles {
-				data, err := os.ReadFile(v)
-				if err != nil {
-					fmt.Println("cant read PID:", err)
-					return
-				}
-				pid, _ := strconv.Atoi(string(data))
-				syscall.Kill(pid, syscall.SIGTERM)
-			}
-			return
-		default:
-			return
-		}
-	case "sync":
-		if os.Getuid() != 0 {
-			fmt.Println("please, run as root")
-			return
-		}
-
-		if len(os.Args) < 3 {
+		if len(args) == 0 {
 			fmt.Println("Starting to sync with https://servidordomal.fun/index.db")
 			if err := Sync("https://servidordomal.fun/index.db"); err != nil {
 				fmt.Println("failed to sync with https://servidordomal.fun/index.db : ", err)
@@ -279,7 +247,7 @@ func main() {
 			return
 		}
 
-		syncurl := os.Args[2]
+		syncurl := args[0]
 
 		fmt.Printf("Starting to sync with %s\n", syncurl)
 		if err := Sync(syncurl); err != nil {
@@ -287,90 +255,137 @@ func main() {
 			return
 		}
 		fmt.Println("Sucessifully sync!")
-		return
+	},
+}
 
-	case "remove":
+var removeCmd = &cobra.Command{
+	Use:   "remove {package} [packages...]",
+	Short: "Remove packages by the package realname",
+	Run: func(cmd *cobra.Command, args []string) {
 		if os.Getuid() != 0 {
 			fmt.Println("please, run as root")
 			return
 		}
+		for _, realname := range args {
 
-		if len(os.Args) < 3 {
-			fmt.Println("usage: packets remove <package-name>")
-			return
+			err := Unninstall(realname)
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
 		}
-
-		err := Unninstall(os.Args[2])
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-		return
-	case "list":
-
+	},
+}
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all installed packages",
+	Run: func(cmd *cobra.Command, args []string) {
 		if err := ListPackets(); err != nil {
 			return
 		}
-		return
+	},
+}
 
-	case "upgrade":
+var upgradeCmd = &cobra.Command{
+	Use:   "upgrade [packages...]",
+	Short: "Upgrade package",
+	Run: func(cmd *cobra.Command, args []string) {
 
-		if os.Getuid() != 0 {
-			fmt.Println("please, run as root")
-			return
+		if len(args) == 0 {
+			log.Fatal("Please insert mannualy the package realname to upgrade this command isn't done")
 		}
 
-		if len(os.Args) < 3 {
-			fmt.Println("usage: packets upgrade <realname>")
-			return
+		for _, og_realname := range args {
+
+			db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			defer db.Close()
+
+			idb, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
+			if err != nil {
+				log.Fatal(err)
+				return
+			}
+			defer idb.Close()
+
+			var family string
+			if err := idb.QueryRow("SELECT family FROM packages WHERE realname = ?", og_realname).Scan(&family); err != nil {
+				log.Fatal("line 239", err)
+				return
+			}
+
+			var neo_realname string
+
+			if err := db.QueryRow("SELECT realname FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&neo_realname); err != nil {
+				log.Fatal("line 245", err)
+				return
+			}
+
+			if neo_realname == og_realname {
+				fmt.Printf("%s is up to date!\n", og_realname)
+				return
+			}
+
+			if err := db.QueryRow("SELECT serial FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&serialPass); err != nil {
+				log.Fatal("line 255", err)
+				return
+			}
+
+			fmt.Println("founded an upgrade")
+			upgradeHelper = neo_realname
+			QueryInstall(neo_realname)
 		}
+	},
+}
 
-		og_realname := os.Args[2]
+func main() {
 
-		db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
+	// ABOUT CONFIG.TOML
+	PacketsDir = internal.PacketsPackageDir()
+	_, err := os.Stat(filepath.Join(PacketsDir, "config.toml"))
+	if os.IsNotExist(err) {
+		fmt.Println("can't find config.toml, generating a default one")
+
+		os.MkdirAll(PacketsDir, 0644)
+		file, err := os.Create(filepath.Join(PacketsDir, "config.toml"))
 		if err != nil {
 			log.Fatal(err)
-			return
 		}
-		defer db.Close()
+		defer file.Close()
 
-		idb, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
-		if err != nil {
+		cfg := internal.DefaultConfigTOML()
+
+		encoder := toml.NewEncoder(file)
+
+		if err := encoder.Encode(cfg); err != nil {
 			log.Fatal(err)
-			return
 		}
-		defer idb.Close()
-
-		var family string
-		if err := idb.QueryRow("SELECT family FROM packages WHERE realname = ?", og_realname).Scan(&family); err != nil {
-			log.Fatal("line 239", err)
-			return
-		}
-
-		var neo_realname string
-
-		if err := db.QueryRow("SELECT realname FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&neo_realname); err != nil {
-			log.Fatal("line 245", err)
-			return
-		}
-
-		if neo_realname == og_realname {
-			fmt.Printf("%s is up to date!\n", og_realname)
-			return
-		}
-
-		if err := db.QueryRow("SELECT serial FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&serialPass); err != nil {
-			log.Fatal("line 255", err)
-			return
-		}
-
-		fmt.Println("founded an upgrade")
-		QueryInstall(neo_realname)
-
-	default:
-		fmt.Printf(" %s it's not a command\n", cmd)
-		return
+		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir\n")
+		fmt.Println("Operation Sucess!")
 	}
+
+	_, err = toml.DecodeFile(filepath.Join(PacketsDir, "config.toml"), &cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// COMMANDS
+	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(serve)
+
+	serve.AddCommand(serveInit)
+	serve.AddCommand(serveStop)
+
+	rootCmd.AddCommand(syncCmd)
+	rootCmd.AddCommand(removeCmd)
+	rootCmd.AddCommand(upgradeCmd)
+	rootCmd.AddCommand(listCmd)
+
+	rootCmd.Execute()
+
 }
 
 func Install(packagepath string, serial uint) error {
@@ -697,8 +712,8 @@ func GetPackageByMirror(mirror string, realname string) error {
 		return err
 	}
 
-	if os.Args[1] == "upgrade" {
-		if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), os.Args[2], serialPass); err != nil {
+	if isUpgrade {
+		if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), upgradeHelper, serialPass); err != nil {
 			return err
 		}
 		return nil
@@ -790,14 +805,14 @@ func QueryInstall(realname string) {
 		u, _ := url.Parse(mirrors)
 		filename := path.Base(u.Path)
 
-		fmt.Println(":: Checking in cache dir")
+		fmt.Println("Checking in cache dir")
 		if CheckDownloaded(filename) {
 			err := Validate(filename, realname)
 			if err != nil {
 				return
 			}
-			if os.Args[1] == "upgrade" {
-				if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), os.Args[2], serialPass); err != nil {
+			if isUpgrade {
+				if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), upgradeHelper, serialPass); err != nil {
 					log.Fatal(err)
 					return
 				}
@@ -840,8 +855,8 @@ func QueryInstall(realname string) {
 				if err != nil {
 					continue
 				} else {
-					if os.Args[1] == "upgrade" {
-						if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), os.Args[2], serialPass); err != nil {
+					if isUpgrade {
+						if err := Upgrade(filepath.Join(cfg.Config.CacheDir, filename), upgradeHelper, serialPass); err != nil {
 							log.Fatal(err)
 							return
 						}
