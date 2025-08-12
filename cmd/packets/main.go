@@ -159,16 +159,16 @@ var installCmd = &cobra.Command{
 			fmt.Printf("can't find any results for %s\n", nameToQuery)
 			return
 		case 1:
-			fmt.Printf("Founded 1 package for %s \n", nameToQuery)
+			fmt.Printf(":: Founded 1 package for %s \n", nameToQuery)
 
 			fmt.Printf("Downloading %s \n", pkgs[0].Realname)
 			QueryInstall(pkgs[0].Realname)
 			return
 
 		default:
-			fmt.Printf("Found %d versions of %s\n Select 1\n", len(pkgs), nameToQuery)
+			fmt.Printf(":: Founded %d versions for %s\n Select 1\n", len(pkgs), nameToQuery)
 			for i, q := range pkgs {
-				fmt.Printf("[%d] %s : %s\n %s\n", i, q.Realname, q.Version, q.Description)
+				fmt.Printf("[%d] %s : %s\n     %s\n", i, q.Realname, q.Version, q.Description)
 			}
 			var choice int
 
@@ -363,7 +363,7 @@ func main() {
 		if err := encoder.Encode(cfg); err != nil {
 			log.Fatal(err)
 		}
-		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir\n")
+		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir")
 		fmt.Println("Operation Sucess!")
 	}
 
@@ -457,7 +457,7 @@ func Install(packagepath string, serial uint) error {
 				return err
 			}
 
-			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir")
 			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
 		}
@@ -842,7 +842,7 @@ func QueryInstall(realname string) {
 
 	} else {
 
-		fmt.Println("A mirror list was found")
+		fmt.Println(":: A mirror list was found")
 		mirrorlist := strings.Fields(mirrors)
 
 		for _, v := range mirrorlist {
@@ -1056,7 +1056,7 @@ func Sync(url string) error {
 			if err != nil {
 				return err
 			}
-			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir\n")
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir")
 			os.Remove(cfg.Config.LastDataDir)
 
 		case "y":
@@ -1108,7 +1108,7 @@ func Sync(url string) error {
 				bar.Finish()
 				return err
 			}
-			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir\n")
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir")
 			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
 
@@ -1208,7 +1208,7 @@ func Unninstall(realname string) error {
 	if !exist {
 		return fmt.Errorf("this package isn't installed")
 	}
-	fmt.Printf("Sure you will remove %s ? [Y/n] ", realname)
+	fmt.Printf(":: Sure you will remove %s ? [Y/n] ", realname)
 	var answer string
 	fmt.Scanf("%s", &answer)
 
@@ -1400,7 +1400,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 				return err
 			}
 
-			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir\n")
+			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n#NEVER CHANGE lastDataDir")
 			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
 		}
