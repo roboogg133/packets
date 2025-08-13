@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
@@ -47,8 +48,46 @@ func PacketsPackageDir() string {
 
 	out, _ := exec.Command("uname", "-s").Output()
 
-	if uname := strings.TrimSpace(string(out)); uname == "OpenTTY" {
-		return "/mnt/....."
+	if uname := strings.TrimSpace(string(out)); uname == "J2ME" {
+
+		_, err := os.Stat("packets.help")
+		if os.IsNotExist(err) {
+			err = nil
+
+			var thedirectory string
+			err := filepath.WalkDir("/mnt", func(path string, d fs.DirEntry, err error) error {
+				if d.IsDir() {
+
+					thedirectory = filepath.Join(path, "packets")
+					if err := os.Mkdir(thedirectory, 0644); err != nil {
+						return err
+					}
+					if err := os.WriteFile("packets.help", []byte(thedirectory), 0644); err != nil {
+						return err
+					}
+					if err := os.Mkdir(filepath.Join(filepath.Join(thedirectory, "cache")), 0644); err != nil {
+						return err
+					}
+					if err := os.Mkdir(filepath.Join(filepath.Join(thedirectory, "packages")), 0644); err != nil {
+						return err
+					}
+					return nil
+				}
+				return nil
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
+			return thedirectory
+		}
+
+		byt, err := os.ReadFile("package.help")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		return string(byt)
+
 	} else {
 		return "/etc/packets"
 	}
@@ -99,11 +138,11 @@ func DefaultConfigTOML() *ConfigTOML {
 	var cfg ConfigTOML
 	out, _ := exec.Command("uname", "-s").Output()
 
-	if uname := strings.TrimSpace(string(out)); uname == "OpenTTY" {
+	if uname := strings.TrimSpace(string(out)); uname == "J2ME" {
 		cfg.Config.HttpPort = 9123
 		cfg.Config.AutoDeleteCacheDir = false
-		cfg.Config.CacheDir = "/mnt/... " // TODO
-		cfg.Config.DataDir = "/mnt/... "  // TODO
+		cfg.Config.CacheDir = "/mnt/... "
+		cfg.Config.DataDir = "/mnt/... " // TODO
 		cfg.Config.DaysToDelete = -1
 		cfg.Config.BinDir = "/home/...."     // TODO
 		cfg.Config.LastDataDir = "/mnt/... " // TODO
