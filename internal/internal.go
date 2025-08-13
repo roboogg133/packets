@@ -71,6 +71,9 @@ func PacketsPackageDir() string {
 					if err := os.Mkdir(filepath.Join(filepath.Join(thedirectory, "packages")), 0644); err != nil {
 						return err
 					}
+					if err := os.Mkdir(filepath.Join(filepath.Join(thedirectory, "bin")), 0644); err != nil {
+						return err
+					}
 					return nil
 				}
 				return nil
@@ -141,11 +144,11 @@ func DefaultConfigTOML() *ConfigTOML {
 	if uname := strings.TrimSpace(string(out)); uname == "J2ME" {
 		cfg.Config.HttpPort = 9123
 		cfg.Config.AutoDeleteCacheDir = false
-		cfg.Config.CacheDir = "/mnt/... "
-		cfg.Config.DataDir = "/mnt/... " // TODO
+		cfg.Config.CacheDir = filepath.Join(PacketsPackageDir(), "cache")
+		cfg.Config.DataDir = filepath.Join(PacketsPackageDir(), "data")
 		cfg.Config.DaysToDelete = -1
-		cfg.Config.BinDir = "/home/...."     // TODO
-		cfg.Config.LastDataDir = "/mnt/... " // TODO
+		cfg.Config.BinDir = filepath.Join(PacketsPackageDir(), "bin")
+		cfg.Config.LastDataDir = filepath.Join(PacketsPackageDir(), "data")
 		return &cfg
 	} else {
 
