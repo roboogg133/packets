@@ -34,6 +34,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+type UpgradeHelpAuto struct {
+	OgRealname  string
+	NeoRealname string
+}
+
 type ConfigTOML struct {
 	Config struct {
 		HttpPort           int    `toml:"httpPort"`
@@ -44,14 +49,6 @@ type ConfigTOML struct {
 		BinDir             string `toml:"binDir"`
 		LastDataDir        string `toml:"lastDataDir"`
 	} `toml:"Config"`
-}
-
-type IndexTOML struct {
-	Name        string    `toml:"name"`
-	Version     string    `toml:"version"`
-	Author      string    `toml:"author"`
-	Description string    `toml:"description"`
-	CreatedAt   time.Time `toml:"createdAt"`
 }
 
 type CountingReader struct {
@@ -286,13 +283,28 @@ var listCmd = &cobra.Command{
 	},
 }
 
+var searchCmd = &cobra.Command{
+	Use:   "search [query name]",
+	Short: "List all packages in index.db",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := Search(cmd, args); err != nil {
+			log.Fatal(err)
+		}
+	},
+}
+
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade [packages...]",
 	Short: "Upgrade package",
 	Run: func(cmd *cobra.Command, args []string) {
 
+		isUpgrade = true
 		if len(args) == 0 {
-			log.Fatal("Please insert mannualy the package realname to upgrade this command isn't done")
+			if err := AutoUpgrade(); err != nil {
+				log.Fatal(err)
+			}
+			return
 		}
 
 		for _, og_realname := range args {
@@ -313,15 +325,23 @@ var upgradeCmd = &cobra.Command{
 
 			var family string
 			if err := idb.QueryRow("SELECT family FROM packages WHERE realname = ?", og_realname).Scan(&family); err != nil {
-				log.Fatal("line 239", err)
-				return
+				if err == sql.ErrNoRows {
+					fmt.Printf("error: cant find %s\n", og_realname)
+					os.Exit(1)
+				} else {
+					log.Fatal(err)
+				}
 			}
 
 			var neo_realname string
 
 			if err := db.QueryRow("SELECT realname FROM packages WHERE family = ? ORDER BY serial DESC LIMIT 1", family).Scan(&neo_realname); err != nil {
-				log.Fatal("line 245", err)
-				return
+				if err == sql.ErrNoRows {
+					fmt.Printf("error: cant find %s\n", og_realname)
+					os.Exit(1)
+				} else {
+					log.Fatal(err)
+				}
 			}
 
 			if neo_realname == og_realname {
@@ -335,7 +355,7 @@ var upgradeCmd = &cobra.Command{
 			}
 
 			fmt.Println("founded an upgrade")
-			upgradeHelper = neo_realname
+			upgradeHelper = og_realname
 			QueryInstall(neo_realname)
 		}
 	},
@@ -373,16 +393,17 @@ func main() {
 	}
 
 	// COMMANDS
-	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(serve)
 
 	serve.AddCommand(serveInit)
 	serve.AddCommand(serveStop)
 
+	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(removeCmd)
 	rootCmd.AddCommand(upgradeCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(searchCmd)
 
 	rootCmd.Execute()
 
@@ -783,6 +804,9 @@ func QueryInstall(realname string) {
 		}
 
 		simplecheck.Close()
+	} else {
+		simplecheck.Close()
+		log.Fatal(err)
 	}
 
 	var mirrors string
@@ -1589,15 +1613,106 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	return nil
 }
 
-func SearchUpgrades(name string) error {
+func AutoUpgrade() error {
 
+	index, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
+	if err != nil {
+		return err
+	}
+	defer index.Close()
+
+	installed, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
+	if err != nil {
+		return err
+	}
+	defer installed.Close()
+
+	rows, err := installed.Query("SELECT family, serial, realname FROM packages")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var family, realname, ogRealname string
+	var serial, maxserial int
+
+	var list []UpgradeHelpAuto
+
+	for rows.Next() {
+		rows.Scan(&family, &serial, &ogRealname)
+		if err := index.QueryRow("SELECT serial, realname FROM packages WHERE serial = (SELECT MAX(serial) FROM packages WHERE family = ?) AND family = ?", family, family).Scan(&maxserial, &realname); err != nil {
+			return err
+		}
+
+		if maxserial > serial {
+			brinco := &UpgradeHelpAuto{
+				OgRealname:  ogRealname,
+				NeoRealname: realname,
+			}
+			list = append(list, *brinco)
+		}
+	}
+
+	for _, v := range list {
+		upgradeHelper = v.OgRealname
+		QueryInstall(v.NeoRealname)
+	}
+
+	return nil
+}
+
+func Search(cmd *cobra.Command, args []string) error {
 	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
-		log.Fatal(err)
 		return err
 	}
 	defer db.Close()
 
+	var name, realname, version, description string
+	var dependenciesRaw *string
+	var arrayDepedencies []string
+
+	if len(args) == 0 {
+
+		rows, err := db.Query("SELECT name, realname, version, description, dependencies FROM packages")
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			if err := rows.Scan(&name, &realname, &version, &description, &dependenciesRaw); err != nil {
+				return err
+			}
+
+			if dependenciesRaw != nil {
+				arrayDepedencies = strings.Fields(*dependenciesRaw)
+			} else {
+				arrayDepedencies = []string{}
+			}
+			fmt.Printf(":: Package %s : %s\n:: (%s)\n    %s\n    Dependencies: %v\n\n", realname, version, name, description, arrayDepedencies)
+		}
+	} else {
+		rows, err := db.Query("SELECT name, realname, version, description, dependencies FROM packages WHERE name = ?", args[0])
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			if err := rows.Scan(&name, &realname, &version, &description, &dependenciesRaw); err != nil {
+				return err
+			}
+
+			if dependenciesRaw != nil {
+				arrayDepedencies = strings.Fields(*dependenciesRaw)
+			} else {
+				arrayDepedencies = []string{}
+			}
+			fmt.Printf(":: Package %s : %s\n:: (%s)\n    %s\n    Dependencies: %v\n\n", realname, version, name, description, arrayDepedencies)
+		}
+
+	}
 	return nil
 }
 
