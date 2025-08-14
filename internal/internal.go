@@ -84,7 +84,7 @@ func PacketsPackageDir() string {
 			return thedirectory
 		}
 
-		byt, err := os.ReadFile("package.help")
+		byt, err := os.ReadFile("packets.help")
 		if err != nil {
 			log.Fatal(err)
 		}
