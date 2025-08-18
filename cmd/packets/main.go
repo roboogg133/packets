@@ -20,6 +20,7 @@ import (
 	"packets/internal"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -364,6 +365,13 @@ var upgradeCmd = &cobra.Command{
 }
 
 func main() {
+
+	if runtime.GOOS == "linux" {
+		if os.Geteuid() != 0 {
+			fmt.Println("Please run packets as root\nThis can change in future versions but currently it is required.")
+			return
+		}
+	}
 
 	// ABOUT CONFIG.TOML
 	PacketsDir = internal.PacketsPackageDir()
