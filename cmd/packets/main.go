@@ -104,6 +104,8 @@ var PacketsDir string
 var isUpgrade bool
 var upgradeHelper string
 
+var Unsafe bool
+
 var rootCmd = &cobra.Command{Use: "packets"}
 
 var installCmd = &cobra.Command{
@@ -399,9 +401,15 @@ func main() {
 	serve.AddCommand(serveStop)
 
 	rootCmd.AddCommand(installCmd)
+	installCmd.Flags().BoolVar(&Unsafe, "unsafe", false, "Execute lua script without sandbox")
+
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(removeCmd)
+	removeCmd.Flags().BoolVar(&Unsafe, "unsafe", false, "Execute lua script without sandbox")
+
 	rootCmd.AddCommand(upgradeCmd)
+	installCmd.Flags().BoolVar(&Unsafe, "unsafe", false, "Execute lua script without sandbox")
+
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(searchCmd)
 
@@ -589,38 +597,40 @@ func Install(packagepath string, serial uint) error {
 	L := lua.NewState()
 	defer L.Close()
 
-	osObject := L.GetGlobal("os").(*lua.LTable)
-	ioObject := L.GetGlobal("io").(*lua.LTable)
+	if !Unsafe {
+		osObject := L.GetGlobal("os").(*lua.LTable)
+		ioObject := L.GetGlobal("io").(*lua.LTable)
 
-	L.SetGlobal("package", lua.LNil)
-	L.SetGlobal("require", lua.LNil)
+		L.SetGlobal("package", lua.LNil)
+		L.SetGlobal("require", lua.LNil)
 
-	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
-	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
-	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
-	L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, name, "data")))
+		L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
+		L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
+		L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
+		L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, name, "data")))
 
-	L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
+		L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
 
-	osObject.RawSetString("execute", lua.LNil)
-	osObject.RawSetString("exit", lua.LNil)
-	osObject.RawSetString("getenv", lua.LNil)
+		osObject.RawSetString("execute", lua.LNil)
+		osObject.RawSetString("exit", lua.LNil)
+		osObject.RawSetString("getenv", lua.LNil)
 
-	osObject.RawSetString("remove", L.NewFunction(internal.SafeRemove))
-	osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
-	osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
-	osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
-	osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
+		osObject.RawSetString("remove", L.NewFunction(internal.SafeRemove))
+		osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
+		osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
+		osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
+		osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
 
-	ioObject.RawSetString("input", lua.LNil)
-	ioObject.RawSetString("output", lua.LNil)
-	ioObject.RawSetString("popen", lua.LNil)
-	ioObject.RawSetString("tmpfile", lua.LNil)
-	ioObject.RawSetString("stdout", lua.LNil)
-	ioObject.RawSetString("stdeer", lua.LNil)
-	ioObject.RawSetString("stdin", lua.LNil)
-	ioObject.RawSetString("lines", lua.LNil)
-	ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+		ioObject.RawSetString("input", lua.LNil)
+		ioObject.RawSetString("output", lua.LNil)
+		ioObject.RawSetString("popen", lua.LNil)
+		ioObject.RawSetString("tmpfile", lua.LNil)
+		ioObject.RawSetString("stdout", lua.LNil)
+		ioObject.RawSetString("stdeer", lua.LNil)
+		ioObject.RawSetString("stdin", lua.LNil)
+		ioObject.RawSetString("lines", lua.LNil)
+		ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+	}
 
 	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, name, manifest.Hooks.Install)); err != nil {
 		log.Panic(err)
@@ -1247,38 +1257,40 @@ func Unninstall(realname string) error {
 	L := lua.NewState()
 	defer L.Close()
 
-	osObject := L.GetGlobal("os").(*lua.LTable)
-	ioObject := L.GetGlobal("io").(*lua.LTable)
+	if !Unsafe {
+		osObject := L.GetGlobal("os").(*lua.LTable)
+		ioObject := L.GetGlobal("io").(*lua.LTable)
 
-	L.SetGlobal("package", lua.LNil)
-	L.SetGlobal("require", lua.LNil)
+		L.SetGlobal("package", lua.LNil)
+		L.SetGlobal("require", lua.LNil)
 
-	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
-	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
-	L.SetGlobal("script", lua.LString(path.Join(cfg.Config.DataDir, realname, manifest.Hooks.Remove)))
-	L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, realname, "data")))
+		L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
+		L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
+		L.SetGlobal("script", lua.LString(path.Join(cfg.Config.DataDir, realname, manifest.Hooks.Remove)))
+		L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, realname, "data")))
 
-	L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
+		L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
 
-	osObject.RawSetString("execute", lua.LNil)
-	osObject.RawSetString("exit", lua.LNil)
-	osObject.RawSetString("getenv", lua.LNil)
+		osObject.RawSetString("execute", lua.LNil)
+		osObject.RawSetString("exit", lua.LNil)
+		osObject.RawSetString("getenv", lua.LNil)
 
-	osObject.RawSetString("remove", L.NewFunction(internal.SafeRemove))
-	osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
-	osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
-	osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
-	osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
+		osObject.RawSetString("remove", L.NewFunction(internal.SafeRemove))
+		osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
+		osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
+		osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
+		osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
 
-	ioObject.RawSetString("input", lua.LNil)
-	ioObject.RawSetString("output", lua.LNil)
-	ioObject.RawSetString("popen", lua.LNil)
-	ioObject.RawSetString("tmpfile", lua.LNil)
-	ioObject.RawSetString("stdout", lua.LNil)
-	ioObject.RawSetString("stdeer", lua.LNil)
-	ioObject.RawSetString("stdin", lua.LNil)
-	ioObject.RawSetString("lines", lua.LNil)
-	ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+		ioObject.RawSetString("input", lua.LNil)
+		ioObject.RawSetString("output", lua.LNil)
+		ioObject.RawSetString("popen", lua.LNil)
+		ioObject.RawSetString("tmpfile", lua.LNil)
+		ioObject.RawSetString("stdout", lua.LNil)
+		ioObject.RawSetString("stderr", lua.LNil)
+		ioObject.RawSetString("stdin", lua.LNil)
+		ioObject.RawSetString("lines", lua.LNil)
+		ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+	}
 
 	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, realname, manifest.Hooks.Remove)); err != nil {
 		log.Panic(err)
@@ -1555,38 +1567,40 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	L := lua.NewState()
 	defer L.Close()
 
-	osObject := L.GetGlobal("os").(*lua.LTable)
-	ioObject := L.GetGlobal("io").(*lua.LTable)
+	if !Unsafe {
+		osObject := L.GetGlobal("os").(*lua.LTable)
+		ioObject := L.GetGlobal("io").(*lua.LTable)
 
-	L.SetGlobal("package", lua.LNil)
-	L.SetGlobal("require", lua.LNil)
+		L.SetGlobal("package", lua.LNil)
+		L.SetGlobal("require", lua.LNil)
 
-	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
-	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
-	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
-	L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, name, "data")))
+		L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
+		L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
+		L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
+		L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, name, "data")))
 
-	L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
+		L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
 
-	osObject.RawSetString("execute", lua.LNil)
-	osObject.RawSetString("exit", lua.LNil)
-	osObject.RawSetString("getenv", lua.LNil)
+		osObject.RawSetString("execute", lua.LNil)
+		osObject.RawSetString("exit", lua.LNil)
+		osObject.RawSetString("getenv", lua.LNil)
 
-	osObject.RawSetString("remove", L.NewFunction(internal.SafeRemove))
-	osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
-	osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
-	osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
-	osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
+		osObject.RawSetString("remove", L.NewFunction(internal.SafeRemove))
+		osObject.RawSetString("rename", L.NewFunction(internal.SafeRename))
+		osObject.RawSetString("copy", L.NewFunction(internal.SafeCopy))
+		osObject.RawSetString("symlink", L.NewFunction(internal.SymbolicLua))
+		osObject.RawSetString("mkdir", L.NewFunction(internal.LMkdir))
 
-	ioObject.RawSetString("input", lua.LNil)
-	ioObject.RawSetString("output", lua.LNil)
-	ioObject.RawSetString("popen", lua.LNil)
-	ioObject.RawSetString("tmpfile", lua.LNil)
-	ioObject.RawSetString("stdout", lua.LNil)
-	ioObject.RawSetString("stdeer", lua.LNil)
-	ioObject.RawSetString("stdin", lua.LNil)
-	ioObject.RawSetString("lines", lua.LNil)
-	ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+		ioObject.RawSetString("input", lua.LNil)
+		ioObject.RawSetString("output", lua.LNil)
+		ioObject.RawSetString("popen", lua.LNil)
+		ioObject.RawSetString("tmpfile", lua.LNil)
+		ioObject.RawSetString("stdout", lua.LNil)
+		ioObject.RawSetString("stderr", lua.LNil)
+		ioObject.RawSetString("stdin", lua.LNil)
+		ioObject.RawSetString("lines", lua.LNil)
+		ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+	}
 
 	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, name, manifest.Hooks.Install)); err != nil {
 		log.Panic(err)
