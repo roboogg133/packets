@@ -408,7 +408,7 @@ func main() {
 	removeCmd.Flags().BoolVar(&Unsafe, "unsafe", false, "Execute lua script without sandbox")
 
 	rootCmd.AddCommand(upgradeCmd)
-	installCmd.Flags().BoolVar(&Unsafe, "unsafe", false, "Execute lua script without sandbox")
+	upgradeCmd.Flags().BoolVar(&Unsafe, "unsafe", false, "Execute lua script without sandbox")
 
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(searchCmd)
