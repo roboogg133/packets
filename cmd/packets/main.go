@@ -364,6 +364,51 @@ var upgradeCmd = &cobra.Command{
 	},
 }
 
+var infoCmd = &cobra.Command{
+	Use:   "info {name}",
+	Short: "Get technical package information",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+
+		_, err := os.Stat(filepath.Join(PacketsDir, "index.db"))
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Println("cant find index.db, please use sync first")
+			}
+		}
+
+		db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
+		if err != nil {
+			log.Fatal("cant find index.db, please use sync first")
+		}
+		defer db.Close()
+
+		var name, version, hash, description, mirrorsRaw, family string
+		var dependenciesRaw *string
+		var dependencies, mirrors []string
+		var serial int
+
+		if err := db.QueryRow("SELECT name, version, hash, description, dependencies, mirrors, family, serial FROM packages WHERE realname = ?", args[0]).Scan(&name, &version, &hash, &description, &dependenciesRaw, &mirrorsRaw, &family, &serial); err != nil {
+			if err == sql.ErrNoRows {
+				fmt.Printf("cant find any result for %s\n", args[0])
+				os.Exit(1)
+			} else {
+				log.Fatal(err)
+			}
+
+		}
+
+		if dependenciesRaw != nil {
+			dependencies = strings.Fields(*dependenciesRaw)
+		} else {
+			dependencies = []string{}
+		}
+		mirrors = strings.Fields(mirrorsRaw)
+
+		fmt.Printf(":: Package %s : %s\n:: (%s)\n    %s\n    Dependencies: %v\n    Mirrors: %v\n    ---------------------------------\n    Family: %s\n    Serial: %d\n    SHA256sum: %s\n", args[0], version, name, description, dependencies, mirrors, family, serial, hash)
+	},
+}
+
 func main() {
 
 	if runtime.GOOS == "linux" {
@@ -376,25 +421,27 @@ func main() {
 	// ABOUT CONFIG.TOML
 	PacketsDir = internal.PacketsPackageDir()
 	_, err := os.Stat(filepath.Join(PacketsDir, "config.toml"))
-	if os.IsNotExist(err) {
-		fmt.Println("can't find config.toml, generating a default one")
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("can't find config.toml, generating a default one")
 
-		os.MkdirAll(PacketsDir, 0644)
-		file, err := os.Create(filepath.Join(PacketsDir, "config.toml"))
-		if err != nil {
-			log.Fatal(err)
+			os.MkdirAll(PacketsDir, 0644)
+			file, err := os.Create(filepath.Join(PacketsDir, "config.toml"))
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer file.Close()
+
+			cfg := internal.DefaultConfigTOML()
+
+			encoder := toml.NewEncoder(file)
+
+			if err := encoder.Encode(cfg); err != nil {
+				log.Fatal(err)
+			}
+			file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir")
+			fmt.Println("Operation Sucess!")
 		}
-		defer file.Close()
-
-		cfg := internal.DefaultConfigTOML()
-
-		encoder := toml.NewEncoder(file)
-
-		if err := encoder.Encode(cfg); err != nil {
-			log.Fatal(err)
-		}
-		file.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir")
-		fmt.Println("Operation Sucess!")
 	}
 
 	_, err = toml.DecodeFile(filepath.Join(PacketsDir, "config.toml"), &cfg)
@@ -420,6 +467,8 @@ func main() {
 
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(searchCmd)
+
+	rootCmd.AddCommand(infoCmd)
 
 	rootCmd.Execute()
 
@@ -715,11 +764,12 @@ func GetPackageByMirror(mirror string, realname string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		err := os.Remove(filepath.Join(cfg.Config.CacheDir, filename))
-		if os.IsNotExist(err) {
-			return fmt.Errorf("failed to download, status code not 200OK")
-		} else if err != nil {
-			return err
+		if err := os.Remove(filepath.Join(cfg.Config.CacheDir, filename)); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("failed to download, status code not 200OK")
+			} else {
+				return err
+			}
 		}
 		return fmt.Errorf("failed to download, status code not 200OK")
 	}
@@ -799,8 +849,10 @@ func ResolvDependencies(realname string) {
 func QueryInstall(realname string) {
 
 	_, err := os.Stat(filepath.Join(PacketsDir, "index.db"))
-	if os.IsNotExist(err) {
-		fmt.Println("cant find index.db, please use sync first")
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("cant find index.db, please use sync first")
+		}
 	}
 
 	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
@@ -934,12 +986,14 @@ func QueryInstall(realname string) {
 func CheckDownloaded(filename string) bool {
 
 	_, err := os.Stat(filepath.Join(cfg.Config.CacheDir, filename))
-	if os.IsNotExist(err) {
-		return false
-	} else {
-		return true
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		} else {
+			return true
+		}
 	}
-
+	return true
 }
 
 func Validate(filename string, realname string) error {
@@ -1060,8 +1114,10 @@ func Sync(url string) error {
 	defer resp.Body.Close()
 	_, err = os.Stat(filepath.Join(PacketsDir, "index.db"))
 
-	if os.IsNotExist(err) {
-		os.MkdirAll(PacketsDir, 0755)
+	if err != nil {
+		if os.IsNotExist(err) {
+			os.MkdirAll(PacketsDir, 0755)
+		}
 	}
 	f, err := os.Create(filepath.Join(PacketsDir, "index.db"))
 	if err != nil {
