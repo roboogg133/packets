@@ -443,11 +443,13 @@ func LMkdir(L *lua.LState) int {
 	if !IsSafe(path) {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] unsafe filepath\n"))
+		return 2
 	}
 
 	if err := os.MkdirAll(path, os.FileMode(perm)); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] mkdir failed\n" + err.Error()))
+		return 2
 	}
 
 	L.Push(lua.LTrue)
@@ -462,13 +464,16 @@ func LuaCompile(L *lua.LState) int {
 
 		if strings.Contains(L.CheckString(i), "/") {
 
-			tryintoacess, err := filepath.Abs(filepath.Clean(L.CheckString(i)))
+			tryintoacess, err := filepath.Abs(filepath.Clean(filepath.Join(SandboxDir, L.CheckString(i))))
 			if err != nil {
 				L.Push(lua.LFalse)
 				L.Push(lua.LString("[packets] invalid filepath\n" + err.Error()))
 				return 2
 			}
-			if !strings.HasPrefix(tryintoacess, SandboxDir) {
+
+			fmt.Printf("sandboxdir: (%s) acessto: (%s)\n", SandboxDir, tryintoacess)
+			rel, err := filepath.Rel(SandboxDir, tryintoacess)
+			if err != nil || strings.HasPrefix(rel, "..") {
 				L.Push(lua.LFalse)
 				L.Push(lua.LString("[packets] unsafe filepath"))
 				return 2
