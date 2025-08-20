@@ -1345,6 +1345,7 @@ func Unninstall(realname string) error {
 	defer L.Close()
 
 	if !Unsafe {
+		internal.SandboxDir = filepath.Join(cfg.Config.DataDir, realname)
 		osObject := L.GetGlobal("os").(*lua.LTable)
 		ioObject := L.GetGlobal("io").(*lua.LTable)
 
@@ -1357,6 +1358,14 @@ func Unninstall(realname string) error {
 		L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, realname, "data")))
 
 		L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
+
+		// Packets build functions
+		build := L.NewTable()
+
+		L.SetField(build, "requirements", L.NewFunction(internal.CompileRequirements))
+		L.SetField(build, "compile", L.NewFunction(internal.LuaCompile))
+
+		L.SetGlobal("build", build)
 
 		osObject.RawSetString("execute", lua.LNil)
 		osObject.RawSetString("exit", lua.LNil)
@@ -1377,6 +1386,7 @@ func Unninstall(realname string) error {
 		ioObject.RawSetString("stdin", lua.LNil)
 		ioObject.RawSetString("lines", lua.LNil)
 		ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+
 	}
 
 	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, realname, manifest.Hooks.Remove)); err != nil {

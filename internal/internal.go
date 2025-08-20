@@ -59,6 +59,8 @@ type Manifest struct {
 	} `toml:"Hooks"`
 }
 
+var SandboxDir string
+
 func PacketsPackageDir() string {
 
 	out, _ := exec.Command("uname", "-s").Output()
@@ -453,7 +455,7 @@ func LMkdir(L *lua.LState) int {
 	return 2
 }
 
-func LuaCompile(L *lua.LState, sandbox string) int {
+func LuaCompile(L *lua.LState) int {
 	lang := L.CheckString(1)
 	args := []string{}
 	for i := 2; i <= L.GetTop(); i++ {
@@ -466,7 +468,7 @@ func LuaCompile(L *lua.LState, sandbox string) int {
 				L.Push(lua.LString("[packets] invalid filepath\n" + err.Error()))
 				return 2
 			}
-			if !strings.HasPrefix(tryintoacess, sandbox) {
+			if !strings.HasPrefix(tryintoacess, SandboxDir) {
 				L.Push(lua.LFalse)
 				L.Push(lua.LString("[packets] unsafe filepath"))
 				return 2
@@ -484,7 +486,7 @@ func LuaCompile(L *lua.LState, sandbox string) int {
 	}
 
 	cmd := exec.Command(bin, args...)
-	cmd.Dir = sandbox
+	cmd.Dir = SandboxDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		L.Push(lua.LFalse)
@@ -502,7 +504,7 @@ func LuaCompile(L *lua.LState, sandbox string) int {
 	return 2
 }
 
-func CompileRequirements(L *lua.LState, sandbox string) int {
+func CompileRequirements(L *lua.LState) int {
 
 	cmdLang := L.CheckString(1)
 
@@ -514,7 +516,7 @@ func CompileRequirements(L *lua.LState, sandbox string) int {
 			L.Push(lua.LString("[packets] invalid filepath\n" + err.Error()))
 			return 2
 		}
-		if !strings.HasPrefix(tryintoacess, sandbox) {
+		if !strings.HasPrefix(tryintoacess, SandboxDir) {
 			L.Push(lua.LFalse)
 			L.Push(lua.LString("[packets] unsafe filepath"))
 			return 2
@@ -525,15 +527,15 @@ func CompileRequirements(L *lua.LState, sandbox string) int {
 
 	switch cmdLang {
 	case "python":
-		cmd := exec.Command("pip", "install", "--target", filepath.Join(sandbox, "tmp/build"), "-r", L.CheckString(2))
-		cmd.Dir = filepath.Join(sandbox, "data")
+		cmd := exec.Command("pip", "install", "--target", filepath.Join(SandboxDir, "tmp/build"), "-r", L.CheckString(2))
+		cmd.Dir = filepath.Join(SandboxDir, "data")
 		err = cmd.Run()
 	case "java":
-		cmd := exec.Command("mvn", "dependency:copy-dependencies", "-DoutputDirectory="+filepath.Join(sandbox, "tmp/build"))
+		cmd := exec.Command("mvn", "dependency:copy-dependencies", "-DoutputDirectory="+filepath.Join(SandboxDir, "tmp/build"))
 		cmd.Dir = L.CheckString(2)
 		err = cmd.Run()
 	case "ruby":
-		cmd := exec.Command("bundle", "install", "--path", filepath.Join(sandbox, "tmp/build"))
+		cmd := exec.Command("bundle", "install", "--path", filepath.Join(SandboxDir, "tmp/build"))
 		cmd.Dir = L.CheckString(2)
 		err = cmd.Run()
 	}
