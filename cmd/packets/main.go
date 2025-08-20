@@ -171,12 +171,13 @@ var installCmd = &cobra.Command{
 			return
 
 		default:
-			fmt.Printf(":: Founded %d versions for %s\n Select 1\n", len(pkgs), nameToQuery)
+			fmt.Printf(":: Founded %d versions for (%s)\n Select 1 to install\n", len(pkgs), nameToQuery)
 			for i, q := range pkgs {
 				fmt.Printf("[%d] %s : %s\n     %s\n", i, q.Realname, q.Version, q.Description)
 			}
 			var choice int
 
+			fmt.Print(">> ")
 			fmt.Fscan(bufio.NewReader(os.Stdin), &choice)
 			if choice > len(pkgs) || choice < 0 {
 				fmt.Println("invalid option")
@@ -495,10 +496,11 @@ func Install(packagepath string, serial uint) error {
 	var destDir = filepath.Join(cfg.Config.DataDir, name)
 
 	if cfg.Config.LastDataDir != cfg.Config.DataDir {
-		fmt.Printf("Ooops... Data directory has been changed from (%s), to (%s), do you want to cancel the installation and Sync first?\n y/n? ", cfg.Config.LastDataDir, cfg.Config.DataDir)
+		fmt.Printf("Ooops... Data directory has been changed from (%s), to (%s), do you want to cancel the installation and Sync first? [Y/n]\n", cfg.Config.LastDataDir, cfg.Config.DataDir)
 
 		var answer string
 
+		fmt.Print(">> ")
 		fmt.Scan(&answer)
 
 		if answer == "y" || answer == "Y" {
@@ -1151,7 +1153,8 @@ func Sync(url string) error {
 		fmt.Println("[y] Yes [n] No, [x] Ignore it and stop to show this message (not recommended)")
 
 		var answer string
-		fmt.Scanln(&answer)
+		fmt.Print(">> ")
+		fmt.Scan(&answer)
 
 		switch answer {
 		case "n":
@@ -1172,7 +1175,8 @@ func Sync(url string) error {
 				return err
 			}
 			f.WriteString("\n\n# BE CAREFULL CHANGING BIN_DIR, BECAUSE THE BINARIES DON'T MOVE AUTOMATICALLY\n# NEVER CHANGE lastDataDir")
-			os.Remove(cfg.Config.LastDataDir)
+
+			return nil
 
 		case "y":
 			if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
@@ -1227,6 +1231,7 @@ func Sync(url string) error {
 			os.Remove(cfg.Config.LastDataDir)
 			bar.Finish()
 
+			return nil
 		default:
 			if err := os.MkdirAll(cfg.Config.DataDir, 0755); err != nil {
 				return err
@@ -1262,7 +1267,7 @@ func Sync(url string) error {
 				return err
 			}
 			bar.Finish()
-
+			return nil
 		}
 	}
 
@@ -1325,7 +1330,8 @@ func Unninstall(realname string) error {
 	}
 	fmt.Printf(":: Sure you will remove %s ? [Y/n] ", realname)
 	var answer string
-	fmt.Scanf("%s", &answer)
+	fmt.Print(">> ")
+	fmt.Scan(&answer)
 
 	if answer != "y" && answer != "Y" {
 		return fmt.Errorf("operation cancelled")
@@ -1459,10 +1465,10 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	}
 
 	if cfg.Config.LastDataDir != cfg.Config.DataDir {
-		fmt.Printf("Ooops... Data directory has been changed from (%s), to (%s), do you want to cancel the installation and Sync first?\n y/n? ", cfg.Config.LastDataDir, cfg.Config.DataDir)
+		fmt.Printf("Ooops... Data directory has been changed from (%s), to (%s), do you want to cancel the installation and Sync first? [Y/n]\n", cfg.Config.LastDataDir, cfg.Config.DataDir)
 
 		var answer string
-
+		fmt.Print(">> ")
 		fmt.Scan(&answer)
 
 		if answer == "y" || answer == "Y" {

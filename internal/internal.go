@@ -16,6 +16,21 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
+var AllowedCmds = map[string]string{
+	"go":          "go",          // "Go code compiler"
+	"gcc":         "gcc",         // "C"
+	"g++":         "g++",         // "C++"
+	"rustc":       "rustc",       // "Rust"
+	"javac":       "javac",       // "Java"
+	"luac":        "luac",        // "Lua"
+	"pyinstaller": "pyinstaller", // "Python"
+	"kotlinc":     "kotlinc",     // "Kotlin"
+	"mcs":         "mcs",         // "C# compiler"
+	"swiftc":      "swiftc",      // "Swift compiler"
+	"ts":          "tsc",         // "TypeScript compiler"
+	"ruby":        "rubyc",       // "Ruby compiler"
+}
+
 type ConfigTOML struct {
 	Config struct {
 		HttpPort           int    `toml:"httpPort"`
@@ -431,6 +446,102 @@ func LMkdir(L *lua.LState) int {
 	if err := os.MkdirAll(path, os.FileMode(perm)); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] mkdir failed\n" + err.Error()))
+	}
+
+	L.Push(lua.LTrue)
+	L.Push(lua.LNil)
+	return 2
+}
+
+func LuaCompile(L *lua.LState, sandbox string) int {
+	lang := L.CheckString(1)
+	args := []string{}
+	for i := 2; i <= L.GetTop(); i++ {
+
+		if strings.Contains(L.CheckString(i), "/") {
+
+			tryintoacess, err := filepath.Abs(filepath.Clean(L.CheckString(i)))
+			if err != nil {
+				L.Push(lua.LFalse)
+				L.Push(lua.LString("[packets] invalid filepath\n" + err.Error()))
+				return 2
+			}
+			if !strings.HasPrefix(tryintoacess, sandbox) {
+				L.Push(lua.LFalse)
+				L.Push(lua.LString("[packets] unsafe filepath"))
+				return 2
+			}
+		}
+
+		args = append(args, L.CheckString(i))
+	}
+
+	bin, suc := AllowedCmds[lang]
+	if !suc {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] unsupported language"))
+		return 2
+	}
+
+	cmd := exec.Command(bin, args...)
+	cmd.Dir = sandbox
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] compile failed\n" + err.Error() + "\n" + string(out)))
+		return 2
+	}
+	if err := cmd.Run(); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] compile failed\n" + err.Error()))
+		return 2
+	}
+
+	L.Push(lua.LTrue)
+	L.Push(lua.LString(string(out)))
+	return 2
+}
+
+func CompileRequirements(L *lua.LState, sandbox string) int {
+
+	cmdLang := L.CheckString(1)
+
+	if strings.Contains(L.CheckString(2), "/") {
+
+		tryintoacess, err := filepath.Abs(filepath.Clean(L.CheckString(2)))
+		if err != nil {
+			L.Push(lua.LFalse)
+			L.Push(lua.LString("[packets] invalid filepath\n" + err.Error()))
+			return 2
+		}
+		if !strings.HasPrefix(tryintoacess, sandbox) {
+			L.Push(lua.LFalse)
+			L.Push(lua.LString("[packets] unsafe filepath"))
+			return 2
+		}
+	}
+
+	var err error
+
+	switch cmdLang {
+	case "python":
+		cmd := exec.Command("pip", "install", "--target", filepath.Join(sandbox, "tmp/build"), "-r", L.CheckString(2))
+		cmd.Dir = filepath.Join(sandbox, "data")
+		err = cmd.Run()
+	case "java":
+		cmd := exec.Command("mvn", "dependency:copy-dependencies", "-DoutputDirectory="+filepath.Join(sandbox, "tmp/build"))
+		cmd.Dir = L.CheckString(2)
+		err = cmd.Run()
+	case "ruby":
+		cmd := exec.Command("bundle", "install", "--path", filepath.Join(sandbox, "tmp/build"))
+		cmd.Dir = L.CheckString(2)
+		err = cmd.Run()
+	}
+
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("[packets] requirements install failed\n" + err.Error()))
+		return 2
 	}
 
 	L.Push(lua.LTrue)
