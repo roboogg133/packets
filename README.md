@@ -41,6 +41,8 @@
 |`packets sync [url]`	    |    Synchronize index.db from remote HTTP source                            |
 |`packets serve init/stop`  |    Starts and stop the LAN service daemon                                  |
 |`packets list`	            |    List all installed packages                                             |
+|`packets info`             |    Get technical package information                                       |
+|`packets search`           |    List all packages in index.db                                           |
 
 # 📦 Package Format
 
