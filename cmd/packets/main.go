@@ -666,6 +666,7 @@ func Install(packagepath string, serial uint) error {
 	defer L.Close()
 
 	if !Unsafe {
+		internal.SandboxDir = filepath.Join(cfg.Config.DataDir, name)
 		osObject := L.GetGlobal("os").(*lua.LTable)
 		ioObject := L.GetGlobal("io").(*lua.LTable)
 
@@ -678,6 +679,14 @@ func Install(packagepath string, serial uint) error {
 		L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, name, "data")))
 
 		L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
+
+		// Packets build functions
+		build := L.NewTable()
+
+		L.SetField(build, "requirements", L.NewFunction(internal.CompileRequirements))
+		L.SetField(build, "compile", L.NewFunction(internal.LuaCompile))
+
+		L.SetGlobal("build", build)
 
 		osObject.RawSetString("execute", lua.LNil)
 		osObject.RawSetString("exit", lua.LNil)
@@ -1665,6 +1674,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	defer L.Close()
 
 	if !Unsafe {
+		internal.SandboxDir = filepath.Join(cfg.Config.DataDir, name)
 		osObject := L.GetGlobal("os").(*lua.LTable)
 		ioObject := L.GetGlobal("io").(*lua.LTable)
 
@@ -1677,6 +1687,14 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		L.SetGlobal("data_dir", lua.LString(filepath.Join(cfg.Config.DataDir, name, "data")))
 
 		L.SetGlobal("path_join", L.NewFunction(internal.Ljoin))
+
+		// Packets build functions
+		build := L.NewTable()
+
+		L.SetField(build, "requirements", L.NewFunction(internal.CompileRequirements))
+		L.SetField(build, "compile", L.NewFunction(internal.LuaCompile))
+
+		L.SetGlobal("build", build)
 
 		osObject.RawSetString("execute", lua.LNil)
 		osObject.RawSetString("exit", lua.LNil)
