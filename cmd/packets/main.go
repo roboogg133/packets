@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -97,6 +98,10 @@ type Manifest struct {
 		Remove  string `toml:"remove"`
 	} `toml:"Hooks"`
 }
+
+// errors
+
+var ErrNotInstalled = errors.New("this package isn't installed")
 
 var serialPass uint
 var cfg ConfigTOML
@@ -270,7 +275,11 @@ var removeCmd = &cobra.Command{
 
 			err := Unninstall(realname)
 			if err != nil {
-				log.Fatal(err)
+				if err == ErrNotInstalled {
+					fmt.Println(err.Error())
+				} else {
+					log.Fatal(err)
+				}
 				return
 			}
 		}
@@ -862,37 +871,45 @@ func QueryInstall(realname string) {
 	defer db.Close()
 
 	simplecheck, err := sql.Open("sqlite", filepath.Join(PacketsDir, "installed.db"))
-	if err == nil {
+	if err != nil {
 
-		var exist bool
-		simplecheck.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE realname = ?  LIMIT 1)", realname).Scan(&exist)
-
-		if exist {
-			fmt.Println("Alredy installed!")
-			simplecheck.Close()
-			return
-		}
-
-		simplecheck.Close()
-	} else {
-		simplecheck.Close()
 		log.Fatal(err)
+
 	}
+	var exist bool
+	simplecheck.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE realname = ?  LIMIT 1)", realname).Scan(&exist)
+	if exist {
+		fmt.Println("Alredy installed!")
+		simplecheck.Close()
+		return
+	}
+	defer simplecheck.Close()
 
 	var mirrors string
+	var serial uint
+	var family string
 
 	ResolvDependencies(realname)
 
-	err = db.QueryRow("SELECT mirrors FROM packages WHERE realname = ?", realname).Scan(&mirrors)
+	err = db.QueryRow("SELECT mirrors, serial, family FROM packages WHERE realname = ?", realname).Scan(&mirrors, &serial, &family)
 	if err != nil {
-		log.Panic(err)
-		return
+		log.Fatal(err)
 	}
-	var serial uint
-	err = db.QueryRow("SELECT serial FROM packages WHERE realname = ?", realname).Scan(&serial)
-	if err != nil {
-		log.Panic(err)
-		return
+
+	if !isUpgrade {
+
+		var recognize string
+
+		err = simplecheck.QueryRow("SELECT realname FROM packages WHERE family = ?", family).Scan(&recognize)
+		if err != nil {
+			if err == sql.ErrNoRows {
+			}
+		}
+		if err == nil {
+			fmt.Println(":: Older package found, upgrading.")
+			isUpgrade = true
+			upgradeHelper = recognize
+		}
 	}
 
 	if !strings.Contains(mirrors, " ") {
@@ -1304,7 +1321,7 @@ func Unninstall(realname string) error {
 	}
 
 	if !exist {
-		return fmt.Errorf("this package isn't installed")
+		return ErrNotInstalled
 	}
 	fmt.Printf(":: Sure you will remove %s ? [Y/n] ", realname)
 	var answer string
@@ -1438,7 +1455,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 	}
 
 	if !exist {
-		return fmt.Errorf("this package isn't installed")
+		return ErrNotInstalled
 	}
 
 	if cfg.Config.LastDataDir != cfg.Config.DataDir {
@@ -1670,7 +1687,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		log.Panic(err)
 	}
 
-	fmt.Printf("\nPackage %s fully installed", name)
+	fmt.Printf("\nPackage %s fully installed\n", name)
 
 	var insert = Installed{
 		Realname:     manifest.Info.Name,
