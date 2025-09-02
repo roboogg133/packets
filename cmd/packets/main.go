@@ -99,6 +99,8 @@ type Manifest struct {
 	} `toml:"Hooks"`
 }
 
+const LANDeadLine = 2
+
 // errors
 
 var ErrNotInstalled = errors.New("this package isn't installed")
@@ -1106,7 +1108,7 @@ func AskLAN(filename string) []Peer {
 			}
 		}
 	}
-	_ = pc.SetDeadline(time.Now().Add(2 * time.Second))
+	_ = pc.SetDeadline(time.Now().Add(LANDeadLine * time.Second))
 	buf := make([]byte, 1500)
 
 	for {
