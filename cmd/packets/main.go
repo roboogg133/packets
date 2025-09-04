@@ -674,6 +674,7 @@ func Install(packagepath string, serial uint) error {
 
 		L.SetGlobal("package", lua.LNil)
 		L.SetGlobal("require", lua.LNil)
+		L.SetGlobal("runningUnsafe", lua.LFalse)
 
 		L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 		L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
@@ -709,6 +710,8 @@ func Install(packagepath string, serial uint) error {
 		ioObject.RawSetString("stdin", lua.LNil)
 		ioObject.RawSetString("lines", lua.LNil)
 		ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+	} else {
+		L.SetGlobal("runningUnsafe", lua.LTrue)
 	}
 
 	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, name, manifest.Hooks.Install)); err != nil {
@@ -1362,6 +1365,7 @@ func Unninstall(realname string) error {
 
 		L.SetGlobal("package", lua.LNil)
 		L.SetGlobal("require", lua.LNil)
+		L.SetGlobal("runningUnsafe", lua.LFalse)
 
 		L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 		L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
@@ -1398,6 +1402,8 @@ func Unninstall(realname string) error {
 		ioObject.RawSetString("lines", lua.LNil)
 		ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
 
+	} else {
+		L.SetGlobal("runningUnsafe", lua.LTrue)
 	}
 
 	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, realname, manifest.Hooks.Remove)); err != nil {
@@ -1687,6 +1693,7 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 
 		L.SetGlobal("package", lua.LNil)
 		L.SetGlobal("require", lua.LNil)
+		L.SetGlobal("runningUnsafe", lua.LFalse)
 
 		L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.DataDir))
 		L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.BinDir))
@@ -1702,6 +1709,8 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		L.SetField(build, "compile", L.NewFunction(internal.LuaCompile))
 
 		L.SetGlobal("build", build)
+
+		// end of build functions
 
 		osObject.RawSetString("execute", lua.LNil)
 		osObject.RawSetString("exit", lua.LNil)
@@ -1722,6 +1731,8 @@ func Upgrade(packagepath string, og_realname string, serial uint) error {
 		ioObject.RawSetString("stdin", lua.LNil)
 		ioObject.RawSetString("lines", lua.LNil)
 		ioObject.RawSetString("open", L.NewFunction(internal.SafeOpen))
+	} else {
+		L.SetGlobal("runningUnsafe", lua.LTrue)
 	}
 
 	if err := L.DoFile(filepath.Join(cfg.Config.DataDir, name, manifest.Hooks.Install)); err != nil {
