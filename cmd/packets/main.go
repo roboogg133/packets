@@ -1428,6 +1428,11 @@ func AlredySatisfied(realname string) error {
 
 	var exist bool
 
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS packages (realname TEXT NOT NULL UNIQUE PRIMARY KEY, version TEXT NOT NULL, dependencies TEXT, name TEXT, family TEXT NOT NULL, serial INTEGER)")
+	if err != nil {
+		return err
+	}
+
 	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE realname = ?  LIMIT 1)", realname).Scan(&exist)
 	if err != nil {
 		return err
