@@ -99,7 +99,7 @@ type Manifest struct {
 	} `toml:"Hooks"`
 }
 
-const LANDeadLine = 2
+const LANDeadLine = 2 * time.Second
 
 // errors
 
@@ -1111,7 +1111,7 @@ func AskLAN(filename string) []Peer {
 			}
 		}
 	}
-	_ = pc.SetDeadline(time.Now().Add(LANDeadLine * time.Second))
+	_ = pc.SetDeadline(time.Now().Add(LANDeadLine))
 	buf := make([]byte, 1500)
 
 	for {
