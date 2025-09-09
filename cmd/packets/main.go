@@ -737,6 +737,7 @@ func Install(packagepath string, serial uint) error {
 	return nil
 }
 
+// GetPackageByMirror download a pacakge from a httpserver
 func GetPackageByMirror(mirror string, realname string) error {
 
 	db, err := sql.Open("sqlite", filepath.Join(PacketsDir, "index.db"))
