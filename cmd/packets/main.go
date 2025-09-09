@@ -486,6 +486,7 @@ func main() {
 
 }
 
+// Install function extracts and execute postinstall scripts, following the manifest.toml
 func Install(packagepath string, serial uint) error {
 
 	manifest, err := internal.ManifestReadXZ(packagepath)
