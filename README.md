@@ -159,5 +159,5 @@ To ensure security, only a limited set of safe functions are exposed in Lua hook
 
 # TODO
 
-- Auto upgrade all packages available
-- Packets Universe
+- Auto-compile packages
+- An web page to upload packages
