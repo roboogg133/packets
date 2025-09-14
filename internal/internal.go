@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -149,4 +150,12 @@ func GetConfigTOML() (*ConfigTOML, error) {
 	}
 
 	return &config, nil
+}
+
+func BroadcastAddr(ip net.IP, mask net.IPMask) net.IP {
+	b := make(net.IP, len(ip))
+	for i := range ip {
+		b[i] = ip[i] | ^mask[i]
+	}
+	return b
 }
