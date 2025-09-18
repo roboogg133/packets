@@ -6,10 +6,12 @@ import (
 	"os"
 	"packets/configs"
 	"packets/internal/utils"
+	utils_lua "packets/internal/utils/lua"
 	"path/filepath"
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
+	lua "github.com/yuin/gopher-lua"
 )
 
 // Install exctract and install from a package file ( tar.zst )
@@ -20,14 +22,14 @@ func InstallPackage(file *os.File) error {
 		return err
 	}
 
-	name := &manifest.Info.Name
+	name := manifest.Info.Name
 
 	configuration, err := configs.GetConfigTOML()
 	if err != nil {
 		return err
 	}
 
-	destDir := filepath.Join(configuration.Config.Data_d, *name)
+	destDir := filepath.Join(configuration.Config.Data_d, name)
 
 	zstdReader, err := zstd.NewReader(file)
 	if err != nil {
@@ -89,6 +91,17 @@ func InstallPackage(file *os.File) error {
 				return err
 			}
 		}
+	}
+
+	L, err := utils_lua.GetSandBox(destDir)
+	if err != nil {
+		return err
+	}
+	L.SetGlobal("data_dir", lua.LFalse)
+	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
+
+	if err := L.DoFile(manifest.Hooks.Install); err != nil {
+		return err
 	}
 
 	return nil
