@@ -1,58 +1,25 @@
 package main
 
 import (
-	"archive/tar"
 	"database/sql"
-	"errors"
 	"fmt"
-	"io"
 	"log"
-	"net"
 	"os"
-	"packets/internal"
+	"packets/configs"
+	"packets/internal/consts"
 	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 
-	"github.com/klauspost/compress/zstd"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
-	"golang.org/x/net/ipv4"
 	_ "modernc.org/sqlite"
 )
-
-// Consts
-
-const DefaultLinux_d = "/etc/packets"
-const LANDeadline = 2 * time.Second
-
-// Errors
-
-var ErrResponseNot200OK = errors.New("the request is not 200, download failed")
-
-// Types
-
-type ConfigTOML struct {
-	Config struct {
-		HttpPort int    `toml:"httpPort"`
-		Cache_d  string `toml:"cache_d"`
-		Data_d   string `toml:"data_d"`
-		Bin_d    string `toml:"bin_d"`
-	} `toml:"Config"`
-}
-
-type Peer struct {
-	IP   net.IP
-	Port int
-}
 
 // init is doing some verifications
 func init() {
 
-	_, err := os.Stat(DefaultLinux_d)
+	_, err := os.Stat(consts.DefaultLinux_d)
 	if os.IsNotExist(err) {
-		err := os.Mkdir(DefaultLinux_d, 0644)
+		err := os.Mkdir(consts.DefaultLinux_d, 0644)
 		if err != nil {
 			if os.IsPermission(err) {
 				fmt.Println("can't create packets root directory, please run as root")
@@ -63,7 +30,7 @@ func init() {
 		}
 	}
 
-	_, err = os.Stat(filepath.Join(DefaultLinux_d, "index.db"))
+	_, err = os.Stat(filepath.Join(consts.DefaultLinux_d, "index.db"))
 	if err != nil {
 
 		if os.IsNotExist(err) {
@@ -73,10 +40,10 @@ func init() {
 		}
 	}
 
-	_, err = os.Stat(filepath.Join(DefaultLinux_d, "installed.db"))
+	_, err = os.Stat(filepath.Join(consts.DefaultLinux_d, "installed.db"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			db, err := sql.Open("sqlite", filepath.Join(DefaultLinux_d, "installed.db"))
+			db, err := sql.Open("sqlite", filepath.Join(consts.DefaultLinux_d, "installed.db"))
 			if err != nil {
 				log.Fatal(db)
 			}
@@ -87,9 +54,9 @@ func init() {
 		}
 	}
 
-	_, err = os.Stat(filepath.Join(DefaultLinux_d, "config.toml"))
+	_, err = os.Stat(filepath.Join(consts.DefaultLinux_d, "config.toml"))
 	if os.IsNotExist(err) {
-		f, err := os.Create(filepath.Join(DefaultLinux_d, "config.toml"))
+		f, err := os.Create(filepath.Join(consts.DefaultLinux_d, "config.toml"))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -98,7 +65,7 @@ func init() {
 
 		encoder := toml.NewEncoder(f)
 
-		cfg, err := internal.DefaultConfigTOML()
+		cfg, err := configs.DefaultConfigTOML()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -107,143 +74,6 @@ func init() {
 			log.Fatal(err)
 		}
 	}
-}
-
-// Install exctract and install from a package file
-func Install(file *os.File) error {
-
-	manifest, err := internal.ReadManifest(file)
-	if err != nil {
-		return err
-	}
-
-	name := &manifest.Info.Name
-
-	configuration, err := internal.GetConfigTOML()
-	if err != nil {
-		return err
-	}
-
-	destDir := filepath.Join(configuration.Config.Data_d, *name)
-
-	zstdReader, err := zstd.NewReader(file)
-	if err != nil {
-		return err
-	}
-	defer zstdReader.Close()
-
-	tarReader := tar.NewReader(zstdReader)
-
-	for {
-		hdr, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		rel := filepath.Clean(hdr.Name)
-
-		if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-			continue
-		}
-
-		if err := os.MkdirAll(destDir, 0755); err != nil {
-			return err
-		}
-
-		absPath := filepath.Join(destDir, rel)
-
-		switch hdr.Typeflag {
-
-		case tar.TypeDir:
-			err = os.MkdirAll(absPath, os.FileMode(hdr.Mode))
-
-			if err != nil {
-				return err
-			}
-
-		case tar.TypeReg:
-			err = os.MkdirAll(filepath.Dir(absPath), 0755)
-			if err != nil {
-				return err
-			}
-
-			out, err := os.Create(absPath)
-			if err != nil {
-				return err
-			}
-
-			_, err = io.Copy(out, tarReader)
-			out.Close()
-			if err != nil {
-				return err
-			}
-
-			err = os.Chmod(absPath, os.FileMode(hdr.Mode))
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func AskLAN(filename string) ([]Peer, error) {
-	var peers []Peer
-	query := []byte("Q:" + filename)
-
-	pc, err := net.ListenPacket("udp", ":0")
-	if err != nil {
-		return []Peer{}, err
-	}
-	defer pc.Close()
-
-	if pconn := ipv4.NewPacketConn(pc); pconn != nil {
-		_ = pconn.SetTTL(1)
-	}
-
-	ifaces, _ := net.Interfaces()
-	for _, ifc := range ifaces {
-		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-
-		addrs, _ := ifc.Addrs()
-		for _, a := range addrs {
-			ipnet, ok := a.(*net.IPNet)
-			if !ok || ipnet.IP.To4() == nil {
-				continue
-			}
-
-			bcast := internal.BroadcastAddr(ipnet.IP.To4(), ipnet.Mask)
-			dst := &net.UDPAddr{IP: bcast, Port: 1333}
-
-			_, err = pc.WriteTo(query, dst)
-			if err != nil {
-				fmt.Printf(":: (%s) can't send to  %s: %s\n", ifc.Name, bcast, err.Error())
-			}
-		}
-	}
-	_ = pc.SetDeadline(time.Now().Add(LANDeadline))
-	buf := make([]byte, 1500)
-
-	for {
-		n, addr, err := pc.ReadFrom(buf)
-		if err != nil {
-			break
-		}
-		msg := string(buf[:n])
-
-		if strings.HasPrefix(msg, "H:"+filename) {
-			parts := strings.Split(msg, ":")
-			port, _ := strconv.Atoi(parts[2])
-			peers = append(peers, Peer{IP: addr.(*net.UDPAddr).IP, Port: port})
-		}
-	}
-	return peers, nil
 }
 
 // COBRA CMDS

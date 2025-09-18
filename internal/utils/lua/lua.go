@@ -1,4 +1,4 @@
-package internal
+package utils
 
 import (
 	"fmt"
@@ -6,6 +6,8 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"packets/configs"
+	"packets/internal/consts"
 	"path/filepath"
 	"strings"
 
@@ -36,9 +38,9 @@ func IsSafe(str string) bool {
 		s = filepath.Clean(str)
 	}
 
-	var cfg ConfigTOML
+	var cfg configs.ConfigTOML
 
-	f, err := os.Open(filepath.Join(DefaultLinux_d, "config.toml"))
+	f, err := os.Open(filepath.Join(consts.DefaultLinux_d, "config.toml"))
 	if err != nil {
 		log.Println("error here opening config.toml")
 		return false
