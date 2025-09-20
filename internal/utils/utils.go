@@ -14,7 +14,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-func DownloadPackageHTTP(url string) (*[]byte, error) {
+func GetFileHTTP(url string) (*[]byte, error) {
 
 	resp, err := http.Get(url)
 	if err != nil {
