@@ -36,6 +36,8 @@ func DefaultConfigTOML() (*ConfigTOML, error) {
 	config.Config.Cache_d = consts.DefaultCache_d
 	config.Config.Data_d = consts.DefaultData_d
 	config.Config.HttpPort = consts.DefaultHttpPort
+	config.Config.Bin_d = consts.DefaultBin_d
+	config.Config.StorePackages = true
 
 	return &config, nil
 }

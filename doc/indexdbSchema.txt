@@ -1,6 +1,6 @@
 CREATE TABLE packages(
     query_name      TEXT NOT NULL,
-    image_url       TEXT,
+    image_url       TEXT NOT NULL,
     name            TEXT NOT NULL UNIQUE PRIMARY KEY,
     version         TEXT NOT NULL,
     public_key      BLOB NOT NULL,

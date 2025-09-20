@@ -145,7 +145,7 @@ func GetPackage(name string) (utils.Package, error) {
 	defer db.Close()
 
 	var packageUrl string
-	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, family, serial, size FROM packages WHERE name = ?", name).
+	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, family, serial, size, dependencies FROM packages WHERE name = ?", name).
 		Scan(
 			&this.QueryName,
 			&this.Version,
@@ -161,6 +161,7 @@ func GetPackage(name string) (utils.Package, error) {
 			&this.Family,
 			&this.Serial,
 			&this.Size,
+			&this.Dependencies,
 		)
 	if err != nil {
 		return utils.Package{}, err

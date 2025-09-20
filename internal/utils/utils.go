@@ -29,6 +29,7 @@ type Package struct {
 	Arch           string
 	Filename       string
 	Size           int64
+	Dependencies   string
 
 	Signature []byte
 	PublicKey ed25519.PublicKey
@@ -196,13 +197,30 @@ func (p *Package) Write() (string, error) {
 	return filepath.Join(consts.DefaultCache_d, p.Filename), nil
 }
 
-func (p *Package) AddToInstalledDB() error {
+func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 	db, err := sql.Open("sqlite", consts.InstalledDB)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
 
-	_, err = db.Exec("INSERT INTO packages (name, version, dependencies)")
+	_, err = db.Exec(`
+    INSERT INTO packages (
+        query_name, name, version, dependencies, description,
+        family, serial, package_d, filename, os, arch, in_cache
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.QueryName,
+		p.Manifest.Info.Name,
+		p.Version,
+		p.Dependencies,
+		p.Description,
+		p.Family,
+		p.Serial,
+		packagePath,
+		p.Filename,
+		p.OS,
+		p.Arch,
+		inCache,
+	)
 	return err
 }

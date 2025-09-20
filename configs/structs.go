@@ -18,9 +18,10 @@ type Manifest struct {
 
 type ConfigTOML struct {
 	Config struct {
-		HttpPort int    `toml:"httpPort"`
-		Cache_d  string `toml:"cache_d"`
-		Data_d   string `toml:"data_d"`
-		Bin_d    string `toml:"bin_d"`
+		HttpPort      int    `toml:"httpPort"`
+		Cache_d       string `toml:"cache_d"`
+		Data_d        string `toml:"data_d"`
+		Bin_d         string `toml:"bin_d"`
+		StorePackages bool   `toml:"store_packages"`
 	} `toml:"Config"`
 }

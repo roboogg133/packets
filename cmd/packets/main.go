@@ -51,7 +51,7 @@ func init() {
 				log.Fatal(db)
 			}
 			defer db.Close()
-			db.Exec("CREATE TABLE IF NOT EXISTS packages (name TEXT NOT NULL UNIQUE PRIMARY KEY, version TEXT NOT NULL, dependencies TEXT NOT NULL DEFAULT '', family TEXT NOT NULL, serial INTEGER, package_d TEXT NOT NULL)")
+			db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,name            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, dependencies    TEXT NOT NULL DEFAULT '', description     TEXT NOT NULL, family          TEXT NOT NULL, serial          INTEGER NOT NULL UNIQUE, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL, image_url       TEXT NOT NULL)")
 		} else {
 			log.Fatal(err)
 		}
