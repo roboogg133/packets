@@ -106,3 +106,21 @@ func InstallPackage(file *os.File) error {
 
 	return nil
 }
+
+func ExecuteRemoveScript(path string) error {
+
+	L, err := utils_lua.GetSandBox(".")
+	if err != nil {
+		return err
+	}
+
+	L.SetGlobal("data_dir", lua.LFalse)
+	L.SetGlobal("script", lua.LString(path))
+	L.SetGlobal("build", lua.LNil)
+
+	if err := L.DoFile(path); err != nil {
+		return err
+	}
+
+	return nil
+}

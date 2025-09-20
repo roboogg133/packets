@@ -2,12 +2,12 @@ package utils_lua
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"packets/configs"
 	"packets/internal/consts"
+	"packets/internal/utils"
 	"path/filepath"
 	"strings"
 
@@ -164,62 +164,16 @@ func LSafeCopy(L *lua.LState) int {
 		return 2
 	}
 
-	src, err := os.Open(oldname)
-	if err != nil {
+	if err := utils.CopyDir(oldname, newname); err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
-		return 2
-
-	}
-	defer src.Close()
-
-	status, err := src.Stat()
-	if err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
-		return 2
-	}
-
-	err = os.MkdirAll(filepath.Dir(newname), 0755)
-	if err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
-		return 2
-	}
-
-	dst, err := os.Create(newname)
-	if err != nil {
-		if !os.IsExist(err) {
-			dst, err = os.Open(newname)
-			if err != nil {
-				L.Push(lua.LFalse)
-				L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
-				return 2
-			}
-		} else {
-			L.Push(lua.LFalse)
-			L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
-			return 2
-		}
-	}
-
-	defer dst.Close()
-	if err := dst.Chmod(status.Mode()); err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
-		return 2
-	}
-
-	_, err = io.Copy(dst, src)
-	if err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] copy failed\n" + err.Error()))
+		L.Push(lua.LString("[packets] error while copy"))
 		return 2
 	}
 
 	L.Push(lua.LTrue)
 	L.Push(lua.LNil)
 	return 2
+
 }
 
 func LSymlink(L *lua.LState) int {
