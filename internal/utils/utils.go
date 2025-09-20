@@ -2,11 +2,14 @@ package utils
 
 import (
 	"archive/tar"
+	"crypto/ed25519"
+	"database/sql"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"packets/configs"
+	"packets/internal/consts"
 	errors_packets "packets/internal/errors"
 	"path/filepath"
 
@@ -14,7 +17,29 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-func GetFileHTTP(url string) (*[]byte, error) {
+type Package struct {
+	PackageF       []byte
+	Version        string
+	ImageUrl       string
+	QueryName      string
+	Description    string
+	Author         string
+	AuthorVerified bool
+	OS             string
+	Arch           string
+	Filename       string
+	Size           int64
+
+	Signature []byte
+	PublicKey ed25519.PublicKey
+
+	Manifest configs.Manifest
+
+	Family string
+	Serial int
+}
+
+func GetFileHTTP(url string) ([]byte, error) {
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -30,14 +55,14 @@ func GetFileHTTP(url string) (*[]byte, error) {
 		return nil, err
 	}
 
-	return &fileBytes, nil
+	return fileBytes, nil
 }
 
 // ReadManifest is crucial to get package metadata it reads manifest.toml from a package file (tar.zst)
-func ReadManifest(file *os.File) (*configs.Manifest, error) {
+func ReadManifest(file io.Reader) (configs.Manifest, error) {
 	zstdReader, err := zstd.NewReader(file)
 	if err != nil {
-		return nil, err
+		return configs.Manifest{}, err
 	}
 	defer zstdReader.Close()
 
@@ -48,7 +73,7 @@ func ReadManifest(file *os.File) (*configs.Manifest, error) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return configs.Manifest{}, err
 		}
 
 		if filepath.Base(header.Name) == "manifest.toml" {
@@ -60,13 +85,14 @@ func ReadManifest(file *os.File) (*configs.Manifest, error) {
 				log.Fatal(err)
 			}
 
-			return &manifest, nil
+			return manifest, nil
 		}
 
 	}
-	return nil, errors_packets.ErrCantFindManifestTOML
+	return configs.Manifest{}, errors_packets.ErrCantFindManifestTOML
 }
 
+// CopyDir copies a directory from source to destination
 func CopyDir(src string, dest string) error {
 	if stats, err := os.Stat(src); err != nil {
 		return err
@@ -114,6 +140,7 @@ func CopyDir(src string, dest string) error {
 	return nil
 }
 
+// CopyFile copies a file from source to destination
 func CopyFile(source string, destination string) error {
 
 	src, err := os.Open(source)
@@ -156,4 +183,26 @@ func CopyFile(source string, destination string) error {
 	}
 
 	return nil
+}
+
+// Write writes the package file to the cache directory and returns the path to it
+func (p *Package) Write() (string, error) {
+
+	if err := os.WriteFile(filepath.Join(consts.DefaultCache_d, p.Filename), p.PackageF, 0644); err != nil {
+		_ = os.Remove(filepath.Join(consts.DefaultCache_d, p.Filename))
+		return "", err
+	}
+
+	return filepath.Join(consts.DefaultCache_d, p.Filename), nil
+}
+
+func (p *Package) AddToInstalledDB() error {
+	db, err := sql.Open("sqlite", consts.InstalledDB)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	_, err = db.Exec("INSERT INTO packages (name, version, dependencies)")
+	return err
 }

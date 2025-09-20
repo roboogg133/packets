@@ -9,4 +9,6 @@ const (
 	DefaultData_d   = "/opt/packets"
 	LANDeadline     = 2 * time.Second
 	IndexDB         = "/etc/packets/index.db"
+	InstalledDB     = "/etc/packets/installed.db"
+	DefaultSyncUrl  = "https://servidordomal.fun/index.db"
 )
