@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Packets – Custom Package Manager</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        background: #fefefe;
+        color: #222;
+        padding: 20px;
+    }
+    header {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    header h1 {
+        font-size: 2.2em;
+        color: #333;
+    }
+    header p {
+        font-size: 1.1em;
+        color: #555;
+    }
+    nav {
+        text-align: center;
+        margin: 15px 0;
+    }
+    nav a {
+        margin: 0 10px;
+        text-decoration: none;
+        color: #0066cc;
+        font-weight: bold;
+    }
+    main {
+        max-width: 900px;
+        margin: auto;
+    }
+    section {
+        margin-bottom: 30px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+    }
+    h2 {
+        color: #222;
+        margin-bottom: 10px;
+    }
+    pre {
+        background: #f4f4f4;
+        padding: 10px;
+        border-radius: 5px;
+        overflow-x: auto;
+    }
+    hr {
+    border: none;        
+    height: 1px;             
+    background: linear-gradient(to right, transparent, #ccc, transparent); 
+    margin: 20px 0;          
+    }
+
+    @media (max-width: 600px) {
+        header h1 {
+            font-size: 1.8em;
+        }
+        nav a {
+            display: block;
+            margin: 5px 0;
+        }
+    }
+</style>
+</head>
+<body>
+    <header>
+        <h1>📦 Packets</h1>
+        <p>Fast, lightweight and compatible</p>
+    </header>
+
+    <nav>
+        <a href="#download">Download</a>
+        <a href="/package">Packages</a>
+        <a href="/upload">Upload</a>
+        <a href="/account">Account</a>
+    </nav>
+    <hr>
+    <main>
+        <section id="basic-info">
+            <h2>Basic Info</h2>
+            <p><strong>Query Name:</strong> {{ .Name }}</p>
+            <p><strong>Realname:</strong> {{ .Realname }}</p>
+            <p><strong>Version:</strong> {{ .Version }}</p>
+            <p><strong>Description:</strong> {{ .Description }}</p>
+            <p><strong>Architecture:</strong> {{ .Arch }}</p>
+            <p><strong>Operating:</strong> {{ .Operating }}</p>
+            <p><strong>Family:</strong> {{ .Family }}</p>
+            <br>
+            <p><strong>Author:</strong> {{ .Author }}</p>
+            <p><strong>Reports:</strong> {{ .Reports }}</p>
+            <p><strong>Uploaded at:</strong> {{ .Uploaded }}</p>
+            <br>
+            <a href="/package/{{ .Realname }}/scripts">Scripts and manifest</a>
+        </section>
+        <section id="dependencies">
+            <h2>Dependencies</h2>
+            <p>[
+            {{range .Dependencies}}
+                <a href="/package/{{.}}">{{.}}</a>,
+            {{ end }}
+            ]</p>
+        </section>
+    </main>
+</body>
+</html>

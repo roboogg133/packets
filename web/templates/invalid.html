@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Packets - Login/Register</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #fefefe;
+    color: #222;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  header h1 {
+    font-size: 2.2em;
+    color: #333;
+  }
+  header p {
+    font-size: 1.1em;
+    color: #555;
+  }
+  nav {
+    text-align: center;
+    margin: 15px 0;
+  }
+  nav a {
+    margin: 0 10px;
+    text-decoration: none;
+    color: #0066cc;
+    font-weight: bold;
+  }
+
+  .container {
+    background: #f9f9f9;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    width: 700px;
+    max-width: 100%;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  }
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid #ccc;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 15px 0;
+    cursor: pointer;
+    font-weight: bold;
+    color: #555;
+    user-select: none;
+    transition: background 0.3s, color 0.3s;
+  }
+  .tab.active {
+    background: white;
+    color: #0066cc;
+    border-bottom: 3px solid #0066cc;
+  }
+  .forms {
+    display: flex;
+    padding: 20px;
+    gap: 20px;
+  }
+  form {
+    flex: 1;
+  }
+  form h2 {
+    margin-bottom: 20px;
+    color: #222;
+    text-align: center;
+  }
+  label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: bold;
+    font-size: 0.9rem;
+  }
+  input {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 15px;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus {
+    outline: none;
+    border-color: #0066cc;
+    box-shadow: 0 0 5px rgba(0,102,204,0.5);
+  }
+  button {
+    width: 100%;
+    padding: 10px;
+    background: #0066cc;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  button:hover{
+    background: #004999;
+  }
+  form:not(.active) {
+    display: none;
+  }
+  hr {
+    border: none;        
+    height: 1px;             
+    background: linear-gradient(to right, transparent, #ccc, transparent); 
+    margin: 20px 0;          
+  }
+
+  @media (max-width: 720px) {
+    .forms {
+      flex-direction: column;
+      padding: 10px;
+      gap: 10px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📦 Packets</h1>
+  <p>Fast, lightweight and compatible</p>
+</header>
+
+<nav>
+  <a href="#download">Download</a>
+  <a href="/package">Packages</a>
+  <a href="/upload">Upload</a>
+  <a href="/account">Account</a>
+</nav>
+<hr>
+
+<div class="container" role="main" aria-label="Login and Registration forms">
+  <div class="tabs" role="tablist">
+    <div class="tab active" role="tab" tabindex="0" aria-selected="true" aria-controls="loginForm" id="loginTab" data-target="loginForm">Login</div>
+    <div class="tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="registerForm" id="registerTab" data-target="registerForm">Register</div>
+  </div>
+  <div class="forms">
+    <form id="loginForm" class="active" action="/login" method="POST" novalidate role="tabpanel" aria-labelledby="loginTab">
+      <h2>Login to Packets</h2>
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" required autocomplete="username" />
+      <label for="loginPassword">Password</label>
+      <input type="password" id="loginPassword" name="password" required autocomplete="current-password" />
+      <button type="submit">Login</button>
+    </form>
+
+    <form id="registerForm" action="/register" method="POST" novalidate role="tabpanel" aria-labelledby="registerTab">
+      <h2>Create an Account</h2>
+      <label for="regUsername">Username</label>
+      <input type="text" id="regUsername" name="username" required autocomplete="username" minlength="3" />
+      <label for="regEmail">Email</label>
+      <input type="email" id="regEmail" name="email" required autocomplete="email" />
+      <label for="regPassword">Password</label>
+      <input type="password" id="regPassword" name="password" required autocomplete="new-password" minlength="6" />
+      <label for="regPasswordConfirm">Confirm Password</label>
+      <input type="password" id="regPasswordConfirm" name="password_confirm" required autocomplete="new-password" minlength="6" />
+      <button type="submit">Register</button>
+    </form>
+  </div>
+</div>
+
+<div style="padding: 10px; margin-top: 5px;">
+  <h1 style="color: red;">Invalid login!</h1>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('.tab');
+  const forms = document.querySelectorAll('form');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', (event) => {
+      event.preventDefault();
+
+      tabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+        t.setAttribute('tabindex', '-1');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      tab.setAttribute('tabindex', '0');
+
+      forms.forEach(form => form.classList.remove('active'));
+
+      const target = tab.getAttribute('data-target');
+      document.getElementById(target).classList.add('active');
+    });
+
+    tab.addEventListener('keydown', e => {
+      let index = Array.from(tabs).indexOf(e.target);
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        tabs[(index + 1) % tabs.length].focus();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        tabs[(index - 1 + tabs.length) % tabs.length].focus();
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
