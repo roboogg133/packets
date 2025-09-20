@@ -8,4 +8,5 @@ const (
 	DefaultHttpPort = 9123
 	DefaultData_d   = "/opt/packets"
 	LANDeadline     = 2 * time.Second
+	IndexDB         = "/etc/packets/index.db"
 )
