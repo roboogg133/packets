@@ -1,0 +1,14 @@
+CREATE TABLE packages(
+    query_name  TEXT NOT NULL,
+    image_url   TEXT,
+    name        TEXT NOT NULL UNIQUE PRIMARY KEY,
+    version     TEXT NOT NULL,
+    public_key BLOB NOT NULL,
+    sha256sum   TEXT NOT NULL,
+    description TEXT NOT NULL,
+    dependencies    TEXT,
+    signature_url TEXT NOT NULL,
+    package_url TEXT NOT NULL,
+    family TEXT NOT NULL,
+    serial INTEGER
+);
