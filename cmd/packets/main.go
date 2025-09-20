@@ -89,4 +89,5 @@ var installCmd = &cobra.Command{
 
 func main() {
 	rootCmd.AddCommand(installCmd)
+	rootCmd.Execute()
 }
