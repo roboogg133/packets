@@ -1,4 +1,4 @@
-package pkg
+package packets
 
 import (
 	"archive/tar"
@@ -23,7 +23,7 @@ import (
 )
 
 // Install exctract and fully install from a package file ( tar.zst )
-func InstallPackage(file *os.File) error {
+func InstallPackage(file io.Reader) error {
 
 	manifest, err := utils.ReadManifest(file)
 	if err != nil {

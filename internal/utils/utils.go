@@ -204,6 +204,17 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 	}
 	defer db.Close()
 
+	var success bool
+
+	defer func() {
+		if !success {
+			_, err := db.Exec("DELETE FROM packages WHERE name = ?", p.Manifest.Info.Name)
+			if err != nil {
+				log.Println("Failed to rollback package addition:", err)
+			}
+		}
+	}()
+
 	_, err = db.Exec(`
     INSERT INTO packages (
         query_name, name, version, dependencies, description,
@@ -222,5 +233,9 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 		p.Arch,
 		inCache,
 	)
+	if err != nil {
+		return err
+	}
+	success = true
 	return err
 }

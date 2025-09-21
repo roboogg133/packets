@@ -2,19 +2,26 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/ed25519"
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
 	"packets/configs"
 	"packets/internal/consts"
 	"packets/internal/utils"
+	packets "packets/pkg"
 	"path/filepath"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
+
+//go:embed ed25519public_key.pem
+var publicKey []byte
 
 // init is doing some verifications
 func init() {
@@ -37,7 +44,10 @@ func init() {
 	if err != nil {
 
 		if os.IsNotExist(err) {
-			fmt.Println("index.db does not exist, try to use \"packets sync\"")
+			if len(os.Args) > 1 && os.Args[0] != "sync" {
+			} else {
+				fmt.Println("index.db does not exist, try to use \"packets sync\"")
+			}
 		} else {
 			log.Fatal(err)
 		}
@@ -51,7 +61,7 @@ func init() {
 				log.Fatal(db)
 			}
 			defer db.Close()
-			db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,name            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, dependencies    TEXT NOT NULL DEFAULT '', description     TEXT NOT NULL, family          TEXT NOT NULL, serial          INTEGER NOT NULL UNIQUE, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL, image_url       TEXT NOT NULL)")
+			db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,name            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, dependencies    TEXT NOT NULL DEFAULT '', description     TEXT NOT NULL, family          TEXT NOT NULL, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL)")
 		} else {
 			log.Fatal(err)
 		}
@@ -87,10 +97,19 @@ var syncCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Short: "Syncronizes with an remote index.db, and check if the data dir is changed",
 	Run: func(cmd *cobra.Command, args []string) {
-		if os.Getuid() != 0 {
-			fmt.Println("please, run as root")
-			return
+
+		_, err := os.Stat(consts.IndexDB)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				log.Fatal("index.db does not exist, try to use \"packets sync\"")
+			}
 		}
+		f, err := os.OpenFile(consts.IndexDB, os.O_WRONLY, 0)
+		if err != nil {
+			log.Fatalf("can't open [ %s ]. Are you running packets as root?\n", consts.IndexDB)
+		}
+		f.Close()
+
 		syncUrl := consts.DefaultSyncUrl
 		if len(args) > 0 {
 			syncUrl = args[0]
@@ -100,12 +119,27 @@ var syncCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
+		databaseSig, err := utils.GetFileHTTP(syncUrl + ".sig")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if syncUrl == consts.DefaultSyncUrl {
+			if !ed25519.Verify(publicKey, DBB, databaseSig) {
+				log.Printf("Signature verification failed for the **MAIN** respository [ %s ], the index.db file may be compromised, do wish to continue? (y/N)\n", syncUrl)
+				fmt.Print(">> ")
+				var a string
+				fmt.Scanf("%s", &a)
+				if a != "y" && a != "Y" {
+					log.Fatalf("aborting, try googling to know about [ %s ]\n", syncUrl)
+				}
+			}
+		}
 
 		if err := os.WriteFile(consts.IndexDB, DBB, 0774); err != nil {
 			log.Fatal(err)
 		}
 
-		fmt.Println("Sucessifully sync!")
+		fmt.Printf(":: Sucessifully syncronized index.db with [ %s ]\n", syncUrl)
 		os.Exit(0)
 	},
 }
@@ -121,6 +155,19 @@ var installCmd = &cobra.Command{
 	Short: "Install a package",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+
+		_, err := os.Stat(consts.IndexDB)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				log.Fatal("index.db does not exist, try to use \"packets sync\"")
+			}
+		}
+		f, err := os.OpenFile(consts.IndexDB, os.O_WRONLY, 0)
+		if err != nil {
+			log.Fatalf("can't open [ %s ]. Are you running packets as root?\n", consts.IndexDB)
+		}
+		f.Close()
+
 		db, err := sql.Open("sqlite", consts.IndexDB)
 		if err != nil {
 			fmt.Println(err)
@@ -137,13 +184,44 @@ var installCmd = &cobra.Command{
 				}
 			}
 			if exist {
+				fmt.Printf(":: Downloading (%s) \n", inputName)
+				p, err := packets.GetPackage(inputName)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				cfg, err := configs.GetConfigTOML()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				reader := bytes.NewReader(p.PackageF)
+				fmt.Printf(":: Installing (%s) \n", inputName)
+				packets.InstallPackage(reader)
+
+				if cfg.Config.StorePackages {
+					pkgPath, err := p.Write()
+					if err != nil {
+						log.Fatal(err)
+					}
+					err = p.AddToInstalledDB(1, pkgPath)
+					if err != nil {
+						log.Fatal(err)
+					}
+				} else {
+					err := p.AddToInstalledDB(0, "")
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+
+				continue
 
 			}
 
-			rows, err := db.Query("SELECT name, version, descriptionFROM packages WHERE query_name = ?", inputName)
+			rows, err := db.Query("SELECT name, version, description FROM packages WHERE query_name = ?", inputName)
 			if err != nil {
 				log.Fatal(err)
-
 			}
 
 			defer rows.Close()
@@ -163,8 +241,37 @@ var installCmd = &cobra.Command{
 			case 1:
 				fmt.Printf(":: Founded 1 package for %s \n", inputName)
 
-				fmt.Printf("Downloading %s \n", pkgs[0].Name)
-				goto install
+				fmt.Printf(":: Downloading %s \n", pkgs[0].Name)
+				p, err := packets.GetPackage(inputName)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				cfg, err := configs.GetConfigTOML()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				reader := bytes.NewReader(p.PackageF)
+				fmt.Printf(":: Installing (%s) \n", pkgs[0].Name)
+				packets.InstallPackage(reader)
+
+				if cfg.Config.StorePackages {
+					pkgPath, err := p.Write()
+					if err != nil {
+						log.Fatal(err)
+					}
+					err = p.AddToInstalledDB(1, pkgPath)
+					if err != nil {
+						log.Fatal(err)
+					}
+				} else {
+					err := p.AddToInstalledDB(0, "")
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+				continue
 
 			default:
 
@@ -181,10 +288,38 @@ var installCmd = &cobra.Command{
 					goto optionagain
 				}
 
-				return
-			}
+				fmt.Printf(":: Downloading %s \n", pkgs[choice].Name)
+				p, err := packets.GetPackage(pkgs[choice].Name)
+				if err != nil {
+					log.Fatal(err)
+				}
 
-		install:
+				cfg, err := configs.GetConfigTOML()
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				reader := bytes.NewReader(p.PackageF)
+				fmt.Printf(":: Installing (%s) \n", pkgs[choice].Name)
+				packets.InstallPackage(reader)
+
+				if cfg.Config.StorePackages {
+					pkgPath, err := p.Write()
+					if err != nil {
+						log.Fatal(err)
+					}
+					err = p.AddToInstalledDB(1, pkgPath)
+					if err != nil {
+						log.Fatal(err)
+					}
+				} else {
+					err := p.AddToInstalledDB(0, "")
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+				continue
+			}
 		}
 
 	},
