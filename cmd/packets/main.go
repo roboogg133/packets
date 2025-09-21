@@ -30,7 +30,7 @@ func init() {
 
 	_, err := os.Stat(consts.DefaultLinux_d)
 	if os.IsNotExist(err) {
-		err := os.Mkdir(consts.DefaultLinux_d, 0755)
+		err := os.Mkdir(consts.DefaultLinux_d, 0777)
 		if err != nil {
 			if os.IsPermission(err) {
 				log.Fatal("can't create packets root directory, please run as root")
@@ -184,6 +184,14 @@ var installCmd = &cobra.Command{
 				}
 			}
 			if exist {
+				installed, err := utils.CheckIfPackageInstalled(inputName)
+				if err != nil {
+					log.Fatal(err)
+				}
+				if installed {
+					fmt.Printf(":: Package %s is already installed\n", inputName)
+					continue
+				}
 				fmt.Printf(":: Downloading (%s) \n", inputName)
 				p, err := packets.GetPackage(inputName)
 				if err != nil {
@@ -236,13 +244,23 @@ var installCmd = &cobra.Command{
 			}
 			switch len(pkgs) {
 			case 0:
-				log.Fatalf("can't find any results for %s\n", inputName)
+				log.Fatalf("can't find any results for (%s)\n", inputName)
 
 			case 1:
 				fmt.Printf(":: Founded 1 package for %s \n", inputName)
 
+				installed, err := utils.CheckIfPackageInstalled(pkgs[0].Name)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				if installed {
+					fmt.Printf(":: Package %s is already installed\n", pkgs[0].Name)
+					continue
+				}
+
 				fmt.Printf(":: Downloading %s \n", pkgs[0].Name)
-				p, err := packets.GetPackage(inputName)
+				p, err := packets.GetPackage(pkgs[0].Name)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -253,7 +271,7 @@ var installCmd = &cobra.Command{
 				}
 
 				reader := bytes.NewReader(p.PackageF)
-				fmt.Printf(":: Installing (%s) \n", pkgs[0].Name)
+				fmt.Printf(":: Installing %s \n", pkgs[0].Name)
 				packets.InstallPackage(reader)
 
 				if cfg.Config.StorePackages {
@@ -286,6 +304,15 @@ var installCmd = &cobra.Command{
 				if choice > len(pkgs) || choice < 0 {
 					fmt.Println("invalid option")
 					goto optionagain
+				}
+
+				installed, err := utils.CheckIfPackageInstalled(pkgs[choice].Name)
+				if err != nil {
+					log.Fatal(err)
+				}
+				if installed {
+					fmt.Printf(":: Package %s is already installed\n", pkgs[choice].Name)
+					continue
 				}
 
 				fmt.Printf(":: Downloading %s \n", pkgs[choice].Name)

@@ -239,3 +239,19 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 	success = true
 	return err
 }
+
+func CheckIfPackageInstalled(name string) (bool, error) {
+	db, err := sql.Open("sqlite", consts.InstalledDB)
+	if err != nil {
+		return false, err
+	}
+	defer db.Close()
+
+	var exists bool
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE name = ?)", name).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
