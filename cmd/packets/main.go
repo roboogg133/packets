@@ -14,6 +14,7 @@ import (
 	"packets/internal/utils"
 	packets "packets/pkg"
 	"path/filepath"
+	"sync"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
@@ -162,9 +163,9 @@ var installCmd = &cobra.Command{
 				log.Fatal("index.db does not exist, try to use \"packets sync\"")
 			}
 		}
-		f, err := os.OpenFile(consts.IndexDB, os.O_WRONLY, 0)
+		f, err := os.OpenFile(consts.InstalledDB, os.O_WRONLY, 0)
 		if err != nil {
-			log.Fatalf("can't open [ %s ]. Are you running packets as root?\n", consts.IndexDB)
+			log.Fatalf("can't open [ %s ]. Are you running packets as root?\n", consts.InstalledDB)
 		}
 		f.Close()
 
@@ -173,6 +174,11 @@ var installCmd = &cobra.Command{
 			fmt.Println(err)
 		}
 		defer db.Close()
+
+		cfg, err := configs.GetConfigTOML()
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		for _, inputName := range args {
 
@@ -192,20 +198,41 @@ var installCmd = &cobra.Command{
 					fmt.Printf(":: Package %s is already installed\n", inputName)
 					continue
 				}
+				fmt.Printf(":: Checking dependencies of (%s)\n", inputName)
+				dependencies, err := utils.GetDependencies(inputName)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				if len(dependencies) > 0 {
+					var wg sync.WaitGroup
+					var mu sync.Mutex
+
+					fmt.Printf(":: Packets will install %s and %d dependencies\nPackages to install:\n", inputName, len(dependencies))
+					fmt.Println(dependencies)
+					fmt.Println("Are you sure? (y/N)")
+					var a string
+					fmt.Scanf("%s", &a)
+					if a != "y" && a != "Y" {
+						os.Exit(1)
+					}
+					for _, depn := range dependencies {
+						wg.Add(1)
+						go AyncFullInstall(depn, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, inputName), &wg, &mu)
+					}
+
+					wg.Wait()
+
+				}
 				fmt.Printf(":: Downloading (%s) \n", inputName)
 				p, err := packets.GetPackage(inputName)
 				if err != nil {
 					log.Fatal(err)
 				}
 
-				cfg, err := configs.GetConfigTOML()
-				if err != nil {
-					log.Fatal(err)
-				}
-
 				reader := bytes.NewReader(p.PackageF)
 				fmt.Printf(":: Installing (%s) \n", inputName)
-				packets.InstallPackage(reader)
+				packets.InstallPackage(reader, filepath.Join(cfg.Config.Data_d, inputName))
 
 				if cfg.Config.StorePackages {
 					pkgPath, err := p.Write()
@@ -259,6 +286,33 @@ var installCmd = &cobra.Command{
 					continue
 				}
 
+				fmt.Printf(":: Checking dependencies of (%s)\n", pkgs[0].Name)
+				dependencies, err := utils.GetDependencies(pkgs[0].Name)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				if len(dependencies) > 0 {
+					var wg sync.WaitGroup
+					var mu sync.Mutex
+
+					fmt.Printf(":: Packets will install %s and %d dependencies\nPackages to install:\n", pkgs[0].Name, len(dependencies))
+					fmt.Println(dependencies)
+					fmt.Println("Are you sure? (y/N)")
+					var a string
+					fmt.Scanf("%s", &a)
+					if a != "y" && a != "Y" {
+						os.Exit(1)
+					}
+					for _, depn := range dependencies {
+						wg.Add(1)
+						go AyncFullInstall(depn, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, inputName), &wg, &mu)
+					}
+
+					wg.Wait()
+
+				}
+
 				fmt.Printf(":: Downloading %s \n", pkgs[0].Name)
 				p, err := packets.GetPackage(pkgs[0].Name)
 				if err != nil {
@@ -272,7 +326,7 @@ var installCmd = &cobra.Command{
 
 				reader := bytes.NewReader(p.PackageF)
 				fmt.Printf(":: Installing %s \n", pkgs[0].Name)
-				packets.InstallPackage(reader)
+				packets.InstallPackage(reader, filepath.Join(cfg.Config.Data_d, pkgs[0].Name))
 
 				if cfg.Config.StorePackages {
 					pkgPath, err := p.Write()
@@ -315,6 +369,33 @@ var installCmd = &cobra.Command{
 					continue
 				}
 
+				fmt.Printf(":: Checking dependencies of (%s)\n", pkgs[choice].Name)
+				dependencies, err := utils.GetDependencies(pkgs[choice].Name)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				if len(dependencies) > 0 {
+					var wg sync.WaitGroup
+					var mu sync.Mutex
+
+					fmt.Printf(":: Packets will install %s and %d dependencies\nPackages to install:\n", pkgs[choice].Name, len(dependencies))
+					fmt.Println(dependencies)
+					fmt.Println("Are you sure? (y/N)")
+					var a string
+					fmt.Scanf("%s", &a)
+					if a != "y" && a != "Y" {
+						os.Exit(1)
+					}
+					for _, depn := range dependencies {
+						wg.Add(1)
+						go AyncFullInstall(depn, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name), &wg, &mu)
+					}
+
+					wg.Wait()
+
+				}
+
 				fmt.Printf(":: Downloading %s \n", pkgs[choice].Name)
 				p, err := packets.GetPackage(pkgs[choice].Name)
 				if err != nil {
@@ -328,7 +409,7 @@ var installCmd = &cobra.Command{
 
 				reader := bytes.NewReader(p.PackageF)
 				fmt.Printf(":: Installing (%s) \n", pkgs[choice].Name)
-				packets.InstallPackage(reader)
+				packets.InstallPackage(reader, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name))
 
 				if cfg.Config.StorePackages {
 					pkgPath, err := p.Write()
@@ -356,4 +437,42 @@ func main() {
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.Execute()
+}
+
+func AyncFullInstall(dep string, storePackages bool, installPath string, wg *sync.WaitGroup, mu *sync.Mutex) {
+	defer wg.Done()
+
+	fmt.Printf("Downloading %s \n", dep)
+	p, err := packets.GetPackage(dep)
+	if err != nil {
+		log.Println("--ERROR--\n", err)
+		return
+	}
+
+	reader := bytes.NewReader(p.PackageF)
+	fmt.Printf("Installing %s \n", dep)
+	packets.InstallPackage(reader, installPath)
+
+	if storePackages {
+		pkgPath, err := p.Write()
+		if err != nil {
+			log.Println("--ERROR--\n", err)
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		err = p.AddToInstalledDB(1, pkgPath)
+		if err != nil {
+			log.Println("--ERROR--\n", err)
+			return
+		}
+	} else {
+		mu.Lock()
+		defer mu.Unlock()
+		err := p.AddToInstalledDB(0, "")
+		if err != nil {
+			log.Println("--ERROR--\n", err)
+			return
+		}
+	}
 }

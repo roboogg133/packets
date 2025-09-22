@@ -12,6 +12,7 @@ import (
 	"packets/internal/consts"
 	errors_packets "packets/internal/errors"
 	"path/filepath"
+	"strings"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/pelletier/go-toml/v2"
@@ -254,4 +255,20 @@ func CheckIfPackageInstalled(name string) (bool, error) {
 	}
 
 	return exists, nil
+}
+
+func GetDependencies(name string) ([]string, error) {
+	db, err := sql.Open("sqlite", consts.InstalledDB)
+	if err != nil {
+		return []string{}, err
+	}
+	defer db.Close()
+
+	var dependenciesRaw string
+
+	if err := db.QueryRow("SELECT dependencies FROM packages WHERE name = ?", name).Scan(&dependenciesRaw); err != nil {
+		return []string{}, err
+	}
+
+	return strings.Fields(dependenciesRaw), nil
 }

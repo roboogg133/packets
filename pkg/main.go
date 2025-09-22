@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"packets/configs"
 	"packets/internal/consts"
 	errors_packets "packets/internal/errors"
 	"packets/internal/utils"
+
 	utils_lua "packets/internal/utils/lua"
 	"path"
 	"path/filepath"
@@ -23,21 +23,12 @@ import (
 )
 
 // Install exctract and fully install from a package file ( tar.zst )
-func InstallPackage(file io.Reader) error {
+func InstallPackage(file io.Reader, destDir string) error {
 
 	manifest, err := utils.ReadManifest(file)
 	if err != nil {
 		return err
 	}
-
-	name := manifest.Info.Name
-
-	configuration, err := configs.GetConfigTOML()
-	if err != nil {
-		return err
-	}
-
-	destDir := filepath.Join(configuration.Config.Data_d, name)
 
 	zstdReader, err := zstd.NewReader(file)
 	if err != nil {
