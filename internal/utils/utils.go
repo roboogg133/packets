@@ -8,11 +8,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
+
 	"packets/configs"
 	"packets/internal/consts"
 	errors_packets "packets/internal/errors"
-	"path/filepath"
-	"strings"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/pelletier/go-toml/v2"
@@ -42,7 +43,6 @@ type Package struct {
 }
 
 func GetFileHTTP(url string) ([]byte, error) {
-
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
@@ -84,7 +84,7 @@ func ReadManifest(file io.Reader) (configs.Manifest, error) {
 			var manifest configs.Manifest
 
 			if err := decoder.Decode(&manifest); err != nil {
-				log.Fatal(err)
+				return configs.Manifest{}, nil
 			}
 
 			return manifest, nil
@@ -105,7 +105,7 @@ func CopyDir(src string, dest string) error {
 				return err
 			}
 
-			if err := os.MkdirAll(dest, 0755); err != nil {
+			if err := os.MkdirAll(dest, 0o755); err != nil {
 				return err
 			}
 
@@ -137,18 +137,15 @@ func CopyDir(src string, dest string) error {
 				return err
 			}
 		}
-
 	}
 	return nil
 }
 
 // CopyFile copies a file from source to destination
 func CopyFile(source string, destination string) error {
-
 	src, err := os.Open(source)
 	if err != nil {
 		return err
-
 	}
 	defer src.Close()
 
@@ -157,7 +154,7 @@ func CopyFile(source string, destination string) error {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Dir(destination), 0755)
+	err = os.MkdirAll(filepath.Dir(destination), 0o755)
 	if err != nil {
 		return err
 	}
@@ -189,8 +186,7 @@ func CopyFile(source string, destination string) error {
 
 // Write writes the package file to the cache directory and returns the path to it
 func (p *Package) Write() (string, error) {
-
-	if err := os.WriteFile(filepath.Join(consts.DefaultCache_d, p.Filename), p.PackageF, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(consts.DefaultCache_d, p.Filename), p.PackageF, 0o644); err != nil {
 		_ = os.Remove(filepath.Join(consts.DefaultCache_d, p.Filename))
 		return "", err
 	}
@@ -271,4 +267,16 @@ func GetDependencies(name string) ([]string, error) {
 	}
 
 	return strings.Fields(dependenciesRaw), nil
+}
+
+func ManifestFileRead(file io.Reader) (configs.Manifest, error) {
+	decoder := toml.NewDecoder(file)
+
+	var manifest configs.Manifest
+
+	if err := decoder.Decode(&manifest); err != nil {
+		return configs.Manifest{}, nil
+	}
+
+	return manifest, nil
 }
