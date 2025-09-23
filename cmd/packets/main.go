@@ -9,18 +9,15 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"sync"
-
 	"packets/configs"
 	"packets/internal/consts"
 	"packets/internal/utils"
-	utils_lua "packets/internal/utils/lua"
 	packets "packets/pkg"
+	"path/filepath"
+	"sync"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
-	lua "github.com/yuin/gopher-lua"
 	_ "modernc.org/sqlite"
 )
 
@@ -29,11 +26,12 @@ var publicKey []byte
 
 // init is doing some verifications
 func init() {
+
 	log.SetFlags(0)
 
 	_, err := os.Stat(consts.DefaultLinux_d)
 	if os.IsNotExist(err) {
-		err := os.Mkdir(consts.DefaultLinux_d, 0o777)
+		err := os.Mkdir(consts.DefaultLinux_d, 0777)
 		if err != nil {
 			if os.IsPermission(err) {
 				log.Fatal("can't create packets root directory, please run as root")
@@ -45,6 +43,7 @@ func init() {
 
 	_, err = os.Stat(filepath.Join(consts.DefaultLinux_d, "index.db"))
 	if err != nil {
+
 		if os.IsNotExist(err) {
 			if len(os.Args) > 1 && os.Args[0] != "sync" {
 			} else {
@@ -63,7 +62,6 @@ func init() {
 				log.Fatal(db)
 			}
 			defer db.Close()
-
 			db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,name            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, dependencies    TEXT NOT NULL DEFAULT '', description     TEXT NOT NULL, family          TEXT NOT NULL, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL)")
 		} else {
 			log.Fatal(err)
@@ -100,6 +98,7 @@ var syncCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Short: "Syncronizes with an remote index.db, and check if the data dir is changed",
 	Run: func(cmd *cobra.Command, args []string) {
+
 		_, err := os.Stat(consts.IndexDB)
 		if err != nil {
 			if !os.IsNotExist(err) {
@@ -137,7 +136,7 @@ var syncCmd = &cobra.Command{
 			}
 		}
 
-		if err := os.WriteFile(consts.IndexDB, DBB, 0o774); err != nil {
+		if err := os.WriteFile(consts.IndexDB, DBB, 0774); err != nil {
 			log.Fatal(err)
 		}
 
@@ -157,6 +156,7 @@ var installCmd = &cobra.Command{
 	Short: "Install a package",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+
 		_, err := os.Stat(consts.IndexDB)
 		if err != nil {
 			if !os.IsNotExist(err) {
@@ -429,57 +429,7 @@ var installCmd = &cobra.Command{
 				continue
 			}
 		}
-	},
-}
 
-var removeCmd = &cobra.Command{
-	Use:   "remove {package name}[package name...] ",
-	Args:  cobra.MinimumNArgs(1),
-	Short: "Remove a package from the given names",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(":: This command will remove permanently this packages, are you sure? (y/N)")
-		var a string
-		fmt.Scanf("%s", &a)
-		if a != "y" && a != "Y" {
-			os.Exit(1)
-		}
-
-		for _, pkgName := range args {
-
-			installed, err := utils.CheckIfPackageInstalled(pkgName)
-			if err != nil {
-				log.Fatal(err)
-			}
-			if installed {
-				db, err := sql.Open("sqlite", consts.InstalledDB)
-				if err != nil {
-					log.Fatal(err)
-				}
-				var packageDir string
-				if err := db.QueryRow("SELECT package_d WHERE name = ?", pkgName).Scan(&packageDir); err != nil {
-					log.Fatal(err)
-				}
-
-				f, err := os.Open(filepath.Join(packageDir, "config.toml"))
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				manifest, err := utils.ManifestFileRead(f)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				L, err := utils_lua.GetSandBox(packageDir)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				L.SetGlobal("build", nil)
-				L.SetGlobal("script", lua.LString(manifest.Hooks.Remove))
-
-			}
-		}
 	},
 }
 
