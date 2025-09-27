@@ -9,15 +9,18 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"packets/configs"
-	"packets/internal/consts"
-	"packets/internal/utils"
-	packets "packets/pkg"
 	"path/filepath"
 	"sync"
 
+	"packets/configs"
+	"packets/internal/consts"
+	"packets/internal/utils"
+	utils_lua "packets/internal/utils/lua"
+	packets "packets/pkg"
+
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
+	lua "github.com/yuin/gopher-lua"
 	_ "modernc.org/sqlite"
 )
 
@@ -26,7 +29,6 @@ var publicKey []byte
 
 // init is doing some verifications
 func init() {
-
 	log.SetFlags(0)
 
 	_, err := os.Stat(consts.DefaultLinux_d)
@@ -43,7 +45,6 @@ func init() {
 
 	_, err = os.Stat(filepath.Join(consts.DefaultLinux_d, "index.db"))
 	if err != nil {
-
 		if os.IsNotExist(err) {
 			if len(os.Args) > 1 && os.Args[0] != "sync" {
 			} else {
@@ -98,7 +99,6 @@ var syncCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Short: "Syncronizes with an remote index.db, and check if the data dir is changed",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		_, err := os.Stat(consts.IndexDB)
 		if err != nil {
 			if !os.IsNotExist(err) {
@@ -156,7 +156,6 @@ var installCmd = &cobra.Command{
 	Short: "Install a package",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-
 		_, err := os.Stat(consts.IndexDB)
 		if err != nil {
 			if !os.IsNotExist(err) {
@@ -207,7 +206,6 @@ var installCmd = &cobra.Command{
 				if len(dependencies) > 0 {
 					var wg sync.WaitGroup
 					var mu sync.Mutex
-
 					fmt.Printf(":: Packets will install %s and %d dependencies\nPackages to install:\n", inputName, len(dependencies))
 					fmt.Println(dependencies)
 					fmt.Println("Are you sure? (y/N)")
@@ -225,7 +223,7 @@ var installCmd = &cobra.Command{
 
 				}
 				fmt.Printf(":: Downloading (%s) \n", inputName)
-				p, err := packets.GetPackage(inputName)
+				p, err := utils.GetPackage(inputName)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -314,7 +312,7 @@ var installCmd = &cobra.Command{
 				}
 
 				fmt.Printf(":: Downloading %s \n", pkgs[0].Name)
-				p, err := packets.GetPackage(pkgs[0].Name)
+				p, err := utils.GetPackage(pkgs[0].Name)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -397,7 +395,7 @@ var installCmd = &cobra.Command{
 				}
 
 				fmt.Printf(":: Downloading %s \n", pkgs[choice].Name)
-				p, err := packets.GetPackage(pkgs[choice].Name)
+				p, err := utils.GetPackage(pkgs[choice].Name)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -429,7 +427,69 @@ var installCmd = &cobra.Command{
 				continue
 			}
 		}
+	},
+}
 
+var removeCmd = &cobra.Command{
+	Use:   "remove {package name}[package name...] ",
+	Args:  cobra.MinimumNArgs(1),
+	Short: "Remove a package from the given names",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(":: This command will remove permanently this packages, are you sure? (y/N)")
+		var a string
+		fmt.Scanf("%s", &a)
+		if a != "y" && a != "Y" {
+			os.Exit(1)
+		}
+
+		for _, pkgName := range args {
+
+			installed, err := utils.CheckIfPackageInstalled(pkgName)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if installed {
+				db, err := sql.Open("sqlite", consts.InstalledDB)
+				if err != nil {
+					log.Fatal(err)
+				}
+				var packageDir string
+				if err := db.QueryRow("SELECT package_d WHERE name = ?", pkgName).Scan(&packageDir); err != nil {
+					log.Fatal(err)
+				}
+
+				f, err := os.Open(filepath.Join(packageDir, "config.toml"))
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				manifest, err := utils.ManifestFileRead(f)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				L, err := utils_lua.GetSandBox(packageDir)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				L.SetGlobal("build", nil)
+				L.SetGlobal("script", lua.LString(manifest.Hooks.Remove))
+				if err := L.DoFile(manifest.Hooks.Remove); err != nil {
+					log.Fatal(err)
+				}
+
+				if err := os.RemoveAll(packageDir); err != nil {
+					log.Fatal(err)
+				}
+
+				if err := utils.RemoveFromInstalledDB(pkgName); err != nil {
+					log.Fatal(err)
+				}
+
+				os.Exit(0)
+			}
+		}
 	},
 }
 
@@ -443,7 +503,7 @@ func AyncFullInstall(dep string, storePackages bool, installPath string, wg *syn
 	defer wg.Done()
 
 	fmt.Printf("Downloading %s \n", dep)
-	p, err := packets.GetPackage(dep)
+	p, err := utils.GetPackage(dep)
 	if err != nil {
 		log.Println("--ERROR--\n", err)
 		return
@@ -461,14 +521,17 @@ func AyncFullInstall(dep string, storePackages bool, installPath string, wg *syn
 		}
 		mu.Lock()
 		defer mu.Unlock()
+
 		err = p.AddToInstalledDB(1, pkgPath)
 		if err != nil {
 			log.Println("--ERROR--\n", err)
 			return
 		}
 	} else {
+
 		mu.Lock()
 		defer mu.Unlock()
+
 		err := p.AddToInstalledDB(0, "")
 		if err != nil {
 			log.Println("--ERROR--\n", err)

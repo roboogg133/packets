@@ -2,12 +2,15 @@ package utils
 
 import (
 	"archive/tar"
+	"bytes"
 	"crypto/ed25519"
 	"database/sql"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -279,4 +282,114 @@ func ManifestFileRead(file io.Reader) (configs.Manifest, error) {
 	}
 
 	return manifest, nil
+}
+
+func RemoveFromInstalledDB(name string) error {
+	db, err := sql.Open("sqlite", consts.InstalledDB)
+	if err != nil {
+		return err
+	}
+
+	if _, err = db.Exec("DELETE FROM packages WHERE name = ?", name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GetPackage retrieves package information from the index database and downloads the package file
+func GetPackage(name string) (Package, error) {
+
+	var this Package
+	var peers []Peer
+
+	db, err := sql.Open("sqlite", consts.IndexDB)
+	if err != nil {
+		return this, err
+	}
+	defer db.Close()
+
+	var packageUrl string
+	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, family, serial, size, dependencies FROM packages WHERE name = ?", name).
+		Scan(
+			&this.QueryName,
+			&this.Version,
+			&packageUrl,
+			&this.ImageUrl,
+			&this.Description,
+			&this.Author,
+			&this.AuthorVerified,
+			&this.OS,
+			&this.Arch,
+			&this.Signature,
+			&this.PublicKey,
+			&this.Family,
+			&this.Serial,
+			&this.Size,
+			&this.Dependencies,
+		)
+	if err != nil {
+		return Package{}, err
+	}
+
+	filename := path.Base(packageUrl)
+	this.Filename = filename
+
+	dirEntry, err := os.ReadDir(consts.DefaultCache_d)
+	if err != nil {
+		return Package{}, err
+	}
+
+	for _, v := range dirEntry {
+		if v.Name() == filename {
+			this.PackageF, err = os.ReadFile(filepath.Join(consts.DefaultCache_d, filename))
+			if err != nil {
+				break
+			}
+			goto skipping
+
+		}
+	}
+
+	peers, err = AskLAN(filename)
+	if err != nil {
+		return Package{}, err
+	}
+
+	if len(peers) == 0 {
+		this.PackageF, err = GetFileHTTP(packageUrl)
+		if err != nil {
+			return Package{}, err
+		}
+	} else {
+		var totalerrors int = 0
+		for _, peer := range peers {
+			this.PackageF, err = GetFileHTTP(fmt.Sprintf("http://%s:%d/%s", peer.IP, peer.Port, filename))
+			if err == nil {
+				break
+			} else {
+				totalerrors++
+			}
+		}
+		if totalerrors == len(peers) {
+			this.PackageF, err = GetFileHTTP(packageUrl)
+			if err != nil {
+				return Package{}, err
+			}
+		}
+	}
+
+skipping:
+
+	reader := bytes.NewReader(this.PackageF)
+	this.Manifest, err = ReadManifest(reader)
+	if err != nil {
+		return Package{}, err
+	}
+
+	if !ed25519.Verify(this.PublicKey, this.PackageF, this.Signature) {
+		return Package{}, errors_packets.ErrInvalidSignature
+	}
+
+	return this, nil
 }
