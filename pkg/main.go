@@ -89,7 +89,7 @@ func InstallPackage(file []byte, destDir string) error {
 	if err != nil {
 		return err
 	}
-	L.SetGlobal("DATA_DIR", lua.LString(filepath.Join(destDir, "data")))
+	L.SetGlobal("data_dir", lua.LString(filepath.Join(destDir, "data")))
 	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
 
 	if err := L.DoFile(filepath.Join(destDir, manifest.Hooks.Install)); err != nil {

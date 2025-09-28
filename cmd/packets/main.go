@@ -27,7 +27,8 @@ var publicKey []byte
 // init is doing some verifications
 func init() {
 	log.SetPrefix("error: ")
-	log.SetFlags(log.Lshortfile)
+	log.SetFlags(0)
+	//log.SetFlags(log.Lshortfile)
 	_, err := os.Stat(consts.DefaultLinux_d)
 	if os.IsNotExist(err) {
 		err := os.Mkdir(consts.DefaultLinux_d, 0777)
@@ -191,10 +192,10 @@ var installCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 				if installed {
-					fmt.Printf(":: Package %s is already installed\n", inputName)
+					log.Printf("package %s is already installed\n", inputName)
 					continue
 				}
-				fmt.Printf(":: Checking dependencies of (%s)\n", inputName)
+				fmt.Printf("Checking dependencies of (%s)\n", inputName)
 				dependencies, err := utils.GetDependencies(inputName)
 				if err != nil {
 					log.Fatal(err)
@@ -219,7 +220,7 @@ var installCmd = &cobra.Command{
 					wg.Wait()
 
 				}
-				fmt.Printf(":: Downloading (%s) \n", inputName)
+				fmt.Printf("Downloading (%s) \n", inputName)
 				p, err := utils.GetPackage(inputName)
 				if err != nil {
 					log.Fatal(err)
@@ -278,11 +279,11 @@ var installCmd = &cobra.Command{
 				}
 
 				if installed {
-					fmt.Printf(":: Package %s is already installed\n", pkgs[0].Name)
+					log.Printf("Package %s is already installed\n", pkgs[0].Name)
 					continue
 				}
 
-				fmt.Printf(":: Checking dependencies of (%s)\n", pkgs[0].Name)
+				fmt.Printf("Checking dependencies of (%s)\n", pkgs[0].Name)
 				dependencies, err := utils.GetDependencies(pkgs[0].Name)
 				if err != nil {
 					log.Fatal(err)
@@ -309,7 +310,7 @@ var installCmd = &cobra.Command{
 
 				}
 
-				fmt.Printf(":: Downloading %s \n", pkgs[0].Name)
+				fmt.Printf("Downloading %s \n", pkgs[0].Name)
 				p, err := utils.GetPackage(pkgs[0].Name)
 				if err != nil {
 					log.Fatal(err)
@@ -362,11 +363,11 @@ var installCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 				if installed {
-					fmt.Printf(":: Package %s is already installed\n", pkgs[choice].Name)
+					log.Printf("package %s is already installed\n", pkgs[choice].Name)
 					continue
 				}
 
-				fmt.Printf(":: Checking dependencies of (%s)\n", pkgs[choice].Name)
+				fmt.Printf("Checking dependencies of (%s)\n", pkgs[choice].Name)
 				dependencies, err := utils.GetDependencies(pkgs[choice].Name)
 				if err != nil {
 					log.Fatal(err)
@@ -393,7 +394,7 @@ var installCmd = &cobra.Command{
 
 				}
 
-				fmt.Printf(":: Downloading %s \n", pkgs[choice].Name)
+				fmt.Printf("Downloading %s \n", pkgs[choice].Name)
 				p, err := utils.GetPackage(pkgs[choice].Name)
 				if err != nil {
 					log.Fatal(err)
@@ -435,7 +436,7 @@ var removeCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Short: "Remove a package from the given names",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(":: This command will remove permanently this packages, are you sure? (y/N)\n>>")
+		fmt.Print(":: This command will remove permanently this packages, are you sure? (y/N)\n>> ")
 		var a string
 		fmt.Scanf("%s", &a)
 		if a != "y" && a != "Y" {
@@ -458,7 +459,6 @@ var removeCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 
-				fmt.Println(filepath.Join(packageDir, "manifest.toml"))
 				f, err := os.Open(filepath.Join(packageDir, "manifest.toml"))
 				if err != nil {
 					log.Fatal(err)
@@ -483,6 +483,7 @@ var removeCmd = &cobra.Command{
 
 				os.Exit(0)
 			}
+			log.Fatalf("%s not installed", pkgName)
 		}
 	},
 }
@@ -497,14 +498,14 @@ func main() {
 func AyncFullInstall(dep string, storePackages bool, installPath string, wg *sync.WaitGroup, mu *sync.Mutex) {
 	defer wg.Done()
 
-	fmt.Printf("Downloading %s \n", dep)
+	fmt.Printf(" Downloading %s \n", dep)
 	p, err := utils.GetPackage(dep)
 	if err != nil {
-		log.Println("--ERROR--\n", err)
+		log.Println(err)
 		return
 	}
 
-	fmt.Printf("Installing %s \n", dep)
+	fmt.Printf(" Installing %s \n", dep)
 	if err := packets.InstallPackage(p.PackageF, installPath); err != nil {
 		log.Fatal(err)
 	}
@@ -520,7 +521,7 @@ func AyncFullInstall(dep string, storePackages bool, installPath string, wg *syn
 
 		err = p.AddToInstalledDB(1, installPath)
 		if err != nil {
-			log.Println("--ERROR--\n", err)
+			log.Println(err)
 			return
 		}
 	} else {

@@ -119,15 +119,17 @@ func IsSafe(str string) bool {
 
 func LSafeRemove(L *lua.LState) int {
 	filename := L.CheckString(1)
+	fmt.Printf("   remove %s\n", filename)
+
 	if !IsSafe(filename) {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] unsafe filepath"))
+		L.Push(lua.LString("unsafe filepath"))
 		return 2
 	}
 	err := os.RemoveAll(filename)
 	if err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] remove failed\n" + err.Error()))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 	L.Push(lua.LTrue)
@@ -139,15 +141,16 @@ func LSafeRename(L *lua.LState) int {
 	oldname := L.CheckString(1)
 	newname := L.CheckString(2)
 
+	fmt.Printf("   move %s -> %s\n", oldname, newname)
 	if !IsSafe(oldname) || !IsSafe(newname) {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] unsafe filepath"))
+		L.Push(lua.LString("unsafe filepath"))
 		return 2
 	}
 
 	if err := os.Rename(oldname, newname); err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] rename failed\n" + err.Error()))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 
@@ -158,6 +161,8 @@ func LSafeCopy(L *lua.LState) int {
 	oldname := L.CheckString(1)
 	newname := L.CheckString(2)
 
+	fmt.Printf("   copy %s -> %s\n", oldname, newname)
+
 	if !IsSafe(oldname) || !IsSafe(newname) {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] unsafe filepath"))
@@ -166,7 +171,7 @@ func LSafeCopy(L *lua.LState) int {
 
 	if err := utils.CopyDir(oldname, newname); err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] error while copy"))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 
@@ -180,6 +185,8 @@ func LSymlink(L *lua.LState) int {
 	fileName := L.CheckString(1)
 	destination := L.CheckString(2)
 
+	fmt.Printf("   symlink %s -> %s\n", fileName, destination)
+
 	if !IsSafe(fileName) || !IsSafe(destination) {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString("[packets] unsafe filepath"))
@@ -189,7 +196,7 @@ func LSymlink(L *lua.LState) int {
 	_ = os.RemoveAll(destination)
 	if err := os.Symlink(fileName, destination); err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] symlink failed\n" + err.Error()))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 
@@ -223,13 +230,13 @@ func LOpen(L *lua.LState) int {
 
 	if !IsSafe(path) {
 		L.Push(lua.LNil)
-		L.Push(lua.LString("[packets] unsafe filepath"))
+		L.Push(lua.LString("unsafe filepath"))
 		return 2
 	}
 	file, err := os.OpenFile(path, modeFlags(mode), 0644)
 	if err != nil {
 		L.Push(lua.LNil)
-		L.Push(lua.LString("[packets] open failed\n" + err.Error()))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 
@@ -259,16 +266,17 @@ func Ljoin(L *lua.LState) int {
 func LMkdir(L *lua.LState) int {
 	path := L.CheckString(1)
 	perm := L.CheckInt(2)
+	fmt.Printf("   mkdir %s \n", path)
 
 	if !IsSafe(path) {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] unsafe filepath\n"))
+		L.Push(lua.LString("unsafe filepath"))
 		return 2
 	}
 
 	if err := os.MkdirAll(path, os.FileMode(perm)); err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] mkdir failed\n" + err.Error()))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 
@@ -287,15 +295,14 @@ func LCompile(L *lua.LState) int {
 			tryintoacess, err := filepath.Abs(filepath.Clean(filepath.Join(SandboxDir, L.CheckString(i))))
 			if err != nil {
 				L.Push(lua.LFalse)
-				L.Push(lua.LString("[packets] invalid filepath\n" + err.Error()))
+				L.Push(lua.LString(err.Error()))
 				return 2
 			}
 
-			fmt.Printf("sandboxdir: (%s) acessto: (%s)\n", SandboxDir, tryintoacess)
 			rel, err := filepath.Rel(SandboxDir, tryintoacess)
 			if err != nil || strings.HasPrefix(rel, "..") {
 				L.Push(lua.LFalse)
-				L.Push(lua.LString("[packets] unsafe filepath"))
+				L.Push(lua.LString("unsafe filepath"))
 				return 2
 			}
 		}
@@ -306,21 +313,22 @@ func LCompile(L *lua.LState) int {
 	bin, suc := AllowedCmds[lang]
 	if !suc {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] unsupported language"))
+		L.Push(lua.LString("unsupported language"))
 		return 2
 	}
 
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = SandboxDir
 	out, err := cmd.CombinedOutput()
+	fmt.Printf("   compiling with %s", bin)
 	if err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] compile failed\n" + err.Error() + "\n" + string(out)))
+		L.Push(lua.LString(err.Error() + "\n" + string(out)))
 		return 2
 	}
 	if err := cmd.Run(); err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] compile failed\n" + err.Error()))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 
@@ -338,18 +346,19 @@ func LCompileRequirements(L *lua.LState) int {
 		tryintoacess, err := filepath.Abs(filepath.Clean(L.CheckString(2)))
 		if err != nil {
 			L.Push(lua.LFalse)
-			L.Push(lua.LString("[packets] invalid filepath\n" + err.Error()))
+			L.Push(lua.LString(err.Error()))
 			return 2
 		}
 		if !strings.HasPrefix(tryintoacess, SandboxDir) {
 			L.Push(lua.LFalse)
-			L.Push(lua.LString("[packets] unsafe filepath"))
+			L.Push(lua.LString("unsafe filepath"))
 			return 2
 		}
 	}
 
 	var err error
 
+	fmt.Printf("   installing requirements with %s", cmdLang)
 	switch cmdLang {
 	case "python":
 		cmd := exec.Command("pip", "install", "--target", filepath.Join(SandboxDir, "tmp/build"), "-r", L.CheckString(2))
@@ -367,7 +376,7 @@ func LCompileRequirements(L *lua.LState) int {
 
 	if err != nil {
 		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] requirements install failed\n" + err.Error()))
+		L.Push(lua.LString(err.Error()))
 		return 2
 	}
 
@@ -375,3 +384,18 @@ func LCompileRequirements(L *lua.LState) int {
 	L.Push(lua.LNil)
 	return 2
 }
+
+func LError(L *lua.LState) int {
+	n := L.GetTop()
+	parts := make([]any, 0, n)
+
+	for i := 1; i <= n; i++ {
+		val := L.Get(i)
+		parts = append(parts, val.String())
+	}
+
+	Llogger().Panic(parts...)
+	return 0
+}
+
+func Llogger() *log.Logger { return log.New(os.Stderr, "   script error: ", 0) }
