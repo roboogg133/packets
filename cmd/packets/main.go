@@ -488,10 +488,91 @@ var removeCmd = &cobra.Command{
 	},
 }
 
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Args:  cobra.NoArgs,
+	Short: "List all installed packages",
+	Run: func(cmd *cobra.Command, args []string) {
+		db, err := sql.Open("sqlite", consts.InstalledDB)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer db.Close()
+
+		var count int
+		if err := db.QueryRow("SELECT COUNT(*) FROM packages").Scan(&count); err != nil {
+			log.Fatal(err)
+		}
+
+		rows, err := db.Query("SELECT query_name, name, version, description, package_d, os, arch FROM packages")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		fmt.Printf(":: Listing all %d packages installed:\n\n", count)
+
+		for rows.Next() {
+			var queryName, name, version, description, packageDir, os, arch string
+			if err := rows.Scan(&queryName, &name, &version, &description, &packageDir, &os, &arch); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("  Package %s \n   ├──Query name: %s\n   ├──Version: %s \n   ├──Package dir: %s\n   ├──OS: %s\n   ├──Arch: %s\n   └──Description: %s\n", name, queryName, version, packageDir, os, arch, description)
+		}
+	},
+}
+
+var searchCmd = &cobra.Command{
+	Use:   "search [query]",
+	Args:  cobra.MaximumNArgs(1),
+	Short: "Search for all packages",
+	Run: func(cmd *cobra.Command, args []string) {
+		db, err := sql.Open("sqlite", consts.IndexDB)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer db.Close()
+
+		var count int
+		if err := db.QueryRow("SELECT COUNT(*) FROM packages").Scan(&count); err != nil {
+			log.Fatal(err)
+		}
+
+		var rows *sql.Rows
+
+		if len(args) > 0 {
+			rows, err = db.Query("SELECT query_name, name, version, description, os, arch FROM packages WHERE name LIKE ? OR description LIKE ? OR query_name LIKE ?", args[0], args[0], args[0])
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer rows.Close()
+		} else {
+
+			rows, err = db.Query("SELECT query_name, name, version, description, os, arch FROM packages")
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer rows.Close()
+		}
+
+		fmt.Printf(":: Listing all %d packages:\n\n", count)
+
+		for rows.Next() {
+			var queryName, name, version, description, os, arch string
+			if err := rows.Scan(&queryName, &name, &version, &description, &os, &arch); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("  Package %s \n   ├──Query name: %s\n   ├──Version: %s \n   ├──OS: %s\n   ├──Arch: %s\n   └──Description: %s\n", name, queryName, version, os, arch, description)
+		}
+	},
+}
+
 func main() {
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(removeCmd)
 	rootCmd.AddCommand(syncCmd)
+	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(searchCmd)
 	rootCmd.Execute()
 }
 
