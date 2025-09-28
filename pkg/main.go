@@ -2,6 +2,7 @@ package packets
 
 import (
 	"archive/tar"
+	"bytes"
 	"io"
 	"os"
 	"packets/internal/utils"
@@ -16,14 +17,13 @@ import (
 )
 
 // Install exctract and fully install from a package file ( tar.zst )
-func InstallPackage(file io.Reader, destDir string) error {
-
-	manifest, err := utils.ReadManifest(file)
+func InstallPackage(file []byte, destDir string) error {
+	manifest, err := utils.ReadManifest(bytes.NewReader(file))
 	if err != nil {
 		return err
 	}
 
-	zstdReader, err := zstd.NewReader(file)
+	zstdReader, err := zstd.NewReader(bytes.NewReader(file))
 	if err != nil {
 		return err
 	}
@@ -89,10 +89,10 @@ func InstallPackage(file io.Reader, destDir string) error {
 	if err != nil {
 		return err
 	}
-	L.SetGlobal("data_dir", lua.LString(filepath.Join(destDir, "data")))
+	L.SetGlobal("DATA_DIR", lua.LString(filepath.Join(destDir, "data")))
 	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
 
-	if err := L.DoFile(manifest.Hooks.Install); err != nil {
+	if err := L.DoFile(filepath.Join(destDir, manifest.Hooks.Install)); err != nil {
 		return err
 	}
 

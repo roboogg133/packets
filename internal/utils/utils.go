@@ -257,7 +257,7 @@ func CheckIfPackageInstalled(name string) (bool, error) {
 }
 
 func GetDependencies(name string) ([]string, error) {
-	db, err := sql.Open("sqlite", consts.InstalledDB)
+	db, err := sql.Open("sqlite", consts.IndexDB)
 	if err != nil {
 		return []string{}, err
 	}

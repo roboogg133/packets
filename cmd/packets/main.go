@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/ed25519"
 	"database/sql"
 	_ "embed"
@@ -15,12 +14,10 @@ import (
 	"packets/configs"
 	"packets/internal/consts"
 	"packets/internal/utils"
-	utils_lua "packets/internal/utils/lua"
 	packets "packets/pkg"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
-	lua "github.com/yuin/gopher-lua"
 	_ "modernc.org/sqlite"
 )
 
@@ -29,8 +26,8 @@ var publicKey []byte
 
 // init is doing some verifications
 func init() {
-	log.SetFlags(0)
-
+	log.SetPrefix("error: ")
+	log.SetFlags(log.Lshortfile)
 	_, err := os.Stat(consts.DefaultLinux_d)
 	if os.IsNotExist(err) {
 		err := os.Mkdir(consts.DefaultLinux_d, 0777)
@@ -107,7 +104,7 @@ var syncCmd = &cobra.Command{
 		}
 		f, err := os.OpenFile(consts.IndexDB, os.O_WRONLY, 0)
 		if err != nil {
-			log.Fatalf("can't open [ %s ]. Are you running packets as root?\n", consts.IndexDB)
+			log.Fatalf("can't open to write [ %s ]. Are you running packets as root?\n", consts.IndexDB)
 		}
 		f.Close()
 
@@ -228,21 +225,22 @@ var installCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 
-				reader := bytes.NewReader(p.PackageF)
 				fmt.Printf(":: Installing (%s) \n", inputName)
-				packets.InstallPackage(reader, filepath.Join(cfg.Config.Data_d, inputName))
+				if err := packets.InstallPackage(p.PackageF, filepath.Join(cfg.Config.Data_d, inputName)); err != nil {
+					log.Fatal(err)
+				}
 
 				if cfg.Config.StorePackages {
-					pkgPath, err := p.Write()
+					_, err := p.Write()
 					if err != nil {
 						log.Fatal(err)
 					}
-					err = p.AddToInstalledDB(1, pkgPath)
+					err = p.AddToInstalledDB(1, filepath.Join(cfg.Config.Data_d, inputName))
 					if err != nil {
 						log.Fatal(err)
 					}
 				} else {
-					err := p.AddToInstalledDB(0, "")
+					err := p.AddToInstalledDB(0, filepath.Join(cfg.Config.Data_d, inputName))
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -322,21 +320,22 @@ var installCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 
-				reader := bytes.NewReader(p.PackageF)
 				fmt.Printf(":: Installing %s \n", pkgs[0].Name)
-				packets.InstallPackage(reader, filepath.Join(cfg.Config.Data_d, pkgs[0].Name))
+				if err := packets.InstallPackage(p.PackageF, filepath.Join(cfg.Config.Data_d, pkgs[0].Name)); err != nil {
+					log.Fatal(err)
+				}
 
 				if cfg.Config.StorePackages {
-					pkgPath, err := p.Write()
+					_, err := p.Write()
 					if err != nil {
 						log.Fatal(err)
 					}
-					err = p.AddToInstalledDB(1, pkgPath)
+					err = p.AddToInstalledDB(1, filepath.Join(cfg.Config.Data_d, pkgs[0].Name))
 					if err != nil {
 						log.Fatal(err)
 					}
 				} else {
-					err := p.AddToInstalledDB(0, "")
+					err := p.AddToInstalledDB(0, filepath.Join(cfg.Config.Data_d, pkgs[0].Name))
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -405,21 +404,22 @@ var installCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 
-				reader := bytes.NewReader(p.PackageF)
 				fmt.Printf(":: Installing (%s) \n", pkgs[choice].Name)
-				packets.InstallPackage(reader, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name))
+				if err := packets.InstallPackage(p.PackageF, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name)); err != nil {
+					log.Fatal(err)
+				}
 
 				if cfg.Config.StorePackages {
-					pkgPath, err := p.Write()
+					_, err := p.Write()
 					if err != nil {
 						log.Fatal(err)
 					}
-					err = p.AddToInstalledDB(1, pkgPath)
+					err = p.AddToInstalledDB(1, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name))
 					if err != nil {
 						log.Fatal(err)
 					}
 				} else {
-					err := p.AddToInstalledDB(0, "")
+					err := p.AddToInstalledDB(0, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name))
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -435,7 +435,7 @@ var removeCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Short: "Remove a package from the given names",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(":: This command will remove permanently this packages, are you sure? (y/N)")
+		fmt.Println(":: This command will remove permanently this packages, are you sure? (y/N)\n>>")
 		var a string
 		fmt.Scanf("%s", &a)
 		if a != "y" && a != "Y" {
@@ -454,11 +454,12 @@ var removeCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 				var packageDir string
-				if err := db.QueryRow("SELECT package_d WHERE name = ?", pkgName).Scan(&packageDir); err != nil {
+				if err := db.QueryRow("SELECT package_d FROM packages WHERE name = ?", pkgName).Scan(&packageDir); err != nil {
 					log.Fatal(err)
 				}
 
-				f, err := os.Open(filepath.Join(packageDir, "config.toml"))
+				fmt.Println(filepath.Join(packageDir, "manifest.toml"))
+				f, err := os.Open(filepath.Join(packageDir, "manifest.toml"))
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -468,16 +469,7 @@ var removeCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 
-				L, err := utils_lua.GetSandBox(packageDir)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				L.SetGlobal("build", nil)
-				L.SetGlobal("script", lua.LString(manifest.Hooks.Remove))
-				if err := L.DoFile(manifest.Hooks.Remove); err != nil {
-					log.Fatal(err)
-				}
+				packets.ExecuteRemoveScript(filepath.Join(packageDir, manifest.Hooks.Remove))
 
 				if err := os.RemoveAll(packageDir); err != nil {
 					log.Fatal(err)
@@ -487,6 +479,8 @@ var removeCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 
+				fmt.Println("Sucessifully removed")
+
 				os.Exit(0)
 			}
 		}
@@ -495,6 +489,7 @@ var removeCmd = &cobra.Command{
 
 func main() {
 	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(removeCmd)
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.Execute()
 }
@@ -509,20 +504,21 @@ func AyncFullInstall(dep string, storePackages bool, installPath string, wg *syn
 		return
 	}
 
-	reader := bytes.NewReader(p.PackageF)
 	fmt.Printf("Installing %s \n", dep)
-	packets.InstallPackage(reader, installPath)
+	if err := packets.InstallPackage(p.PackageF, installPath); err != nil {
+		log.Fatal(err)
+	}
 
 	if storePackages {
-		pkgPath, err := p.Write()
+		_, err := p.Write()
 		if err != nil {
-			log.Println("--ERROR--\n", err)
+			log.Println(err)
 			return
 		}
 		mu.Lock()
 		defer mu.Unlock()
 
-		err = p.AddToInstalledDB(1, pkgPath)
+		err = p.AddToInstalledDB(1, installPath)
 		if err != nil {
 			log.Println("--ERROR--\n", err)
 			return
@@ -532,9 +528,9 @@ func AyncFullInstall(dep string, storePackages bool, installPath string, wg *syn
 		mu.Lock()
 		defer mu.Unlock()
 
-		err := p.AddToInstalledDB(0, "")
+		err := p.AddToInstalledDB(0, installPath)
 		if err != nil {
-			log.Println("--ERROR--\n", err)
+			log.Println(err)
 			return
 		}
 	}

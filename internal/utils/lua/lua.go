@@ -20,10 +20,10 @@ func GetSandBox(sandboxdir string) (lua.LState, error) {
 
 	L.SetGlobal("package", lua.LNil)
 	L.SetGlobal("require", lua.LNil)
-	L.SetGlobal("runningUnsafe", lua.LFalse)
+	L.SetGlobal("SAFE_MODE", lua.LTrue)
 
-	L.SetGlobal("packets_package_dir", lua.LString(cfg.Config.Data_d))
-	L.SetGlobal("packets_bin_dir", lua.LString(cfg.Config.Bin_d))
+	L.SetGlobal("PACKETS_DATADIR", lua.LString(cfg.Config.Data_d))
+	L.SetGlobal("PACKETS_BIN_DIR", lua.LString(cfg.Config.Bin_d))
 
 	L.SetGlobal("path_join", L.NewFunction(Ljoin))
 
