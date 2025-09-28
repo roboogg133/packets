@@ -525,7 +525,7 @@ var listCmd = &cobra.Command{
 var searchCmd = &cobra.Command{
 	Use:   "search [query]",
 	Args:  cobra.MaximumNArgs(1),
-	Short: "Search for all packages",
+	Short: "Search for packages in the index.db",
 	Run: func(cmd *cobra.Command, args []string) {
 		db, err := sql.Open("sqlite", consts.IndexDB)
 		if err != nil {
