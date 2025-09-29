@@ -109,7 +109,7 @@ func InstallPackage(file []byte, destDir string) error {
 		}
 	}
 
-	L, err := utils_lua.GetSandBox(destDir)
+	L, err := utils_lua.GetSandBox()
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func InstallPackage(file []byte, destDir string) error {
 // ExecuteRemoveScript executes the remove script from the package
 func ExecuteRemoveScript(path string) error {
 
-	L, err := utils_lua.GetSandBox(".")
+	L, err := utils_lua.GetSandBox()
 	if err != nil {
 		return err
 	}

@@ -6,9 +6,7 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-func GetSandBox(sandboxdir string) (lua.LState, error) {
-
-	SandboxDir = sandboxdir
+func GetSandBox() (lua.LState, error) {
 
 	cfg, err := configs.GetConfigTOML()
 	if err != nil {
