@@ -398,7 +398,7 @@ skipping:
 }
 
 func GetPacketsUID() (int, error) {
-	_ = exec.Command("useradd", "-M", "-N", "packets").Run()
+	_ = exec.Command("useradd", "-M", "-N", "-r", "packets").Run()
 	cmd := exec.Command("id", "-u", "packets")
 
 	out, err := cmd.CombinedOutput()
@@ -416,8 +416,8 @@ func GetPacketsUID() (int, error) {
 
 func ChangeToNoPermission() error {
 	uid, err := GetPacketsUID()
-	if err != nil { 
-		return err 
+	if err != nil {
+		return err
 	}
 
 	return syscall.Setresuid(0, uid, 0)
