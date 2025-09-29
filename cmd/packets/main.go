@@ -160,11 +160,10 @@ var installCmd = &cobra.Command{
 				log.Fatal("index.db does not exist, try to use \"packets sync\"")
 			}
 		}
-		f, err := os.OpenFile(consts.InstalledDB, os.O_WRONLY, 0)
-		if err != nil {
-			log.Fatalf("can't open [ %s ]. Are you running packets as root?\n", consts.InstalledDB)
+
+		if os.Getuid() != 0 {
+			log.Fatal("you must run this command as root")
 		}
-		f.Close()
 
 		db, err := sql.Open("sqlite", consts.IndexDB)
 		if err != nil {
@@ -436,7 +435,12 @@ var removeCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(1),
 	Short: "Remove a package from the given names",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Print(":: This command will remove permanently this packages, are you sure? (y/N)\n>> ")
+
+		if os.Getuid() != 0 {
+			log.Fatal("you must run this command as root")
+		}
+
+		fmt.Print("WARNING: This command will remove permanently this packages, are you sure? (y/N) ")
 		var a string
 		fmt.Scanf("%s", &a)
 		if a != "y" && a != "Y" {
@@ -468,6 +472,7 @@ var removeCmd = &cobra.Command{
 				if err != nil {
 					log.Fatal(err)
 				}
+				fmt.Println(":: Removing", pkgName)
 
 				packets.ExecuteRemoveScript(filepath.Join(packageDir, manifest.Hooks.Remove))
 

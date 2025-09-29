@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"packets/configs"
 	"packets/internal/consts"
 	"packets/internal/utils"
@@ -121,11 +120,6 @@ func LSafeRemove(L *lua.LState) int {
 	filename := L.CheckString(1)
 	fmt.Printf("   remove %s\n", filename)
 
-	if !IsSafe(filename) {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("unsafe filepath"))
-		return 2
-	}
 	err := os.RemoveAll(filename)
 	if err != nil {
 		L.Push(lua.LFalse)
@@ -142,11 +136,6 @@ func LSafeRename(L *lua.LState) int {
 	newname := L.CheckString(2)
 
 	fmt.Printf("   move %s -> %s\n", oldname, newname)
-	if !IsSafe(oldname) || !IsSafe(newname) {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("unsafe filepath"))
-		return 2
-	}
 
 	if err := os.Rename(oldname, newname); err != nil {
 		L.Push(lua.LFalse)
@@ -162,12 +151,6 @@ func LSafeCopy(L *lua.LState) int {
 	newname := L.CheckString(2)
 
 	fmt.Printf("   copy %s -> %s\n", oldname, newname)
-
-	if !IsSafe(oldname) || !IsSafe(newname) {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] unsafe filepath"))
-		return 2
-	}
 
 	if err := utils.CopyDir(oldname, newname); err != nil {
 		L.Push(lua.LFalse)
@@ -186,12 +169,6 @@ func LSymlink(L *lua.LState) int {
 	destination := L.CheckString(2)
 
 	fmt.Printf("   symlink %s -> %s\n", fileName, destination)
-
-	if !IsSafe(fileName) || !IsSafe(destination) {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("[packets] unsafe filepath"))
-		return 2
-	}
 
 	_ = os.RemoveAll(destination)
 	if err := os.Symlink(fileName, destination); err != nil {
@@ -224,15 +201,11 @@ func modeFlags(mode string) int {
 	}
 }
 
+/*
 func LOpen(L *lua.LState) int {
 	path := L.CheckString(1)
 	mode := L.OptString(2, "r")
 
-	if !IsSafe(path) {
-		L.Push(lua.LNil)
-		L.Push(lua.LString("unsafe filepath"))
-		return 2
-	}
 	file, err := os.OpenFile(path, modeFlags(mode), 0644)
 	if err != nil {
 		L.Push(lua.LNil)
@@ -247,6 +220,7 @@ func LOpen(L *lua.LState) int {
 	L.Push(lua.LNil)
 	return 2
 }
+*/
 
 func Ljoin(L *lua.LState) int {
 
@@ -268,113 +242,15 @@ func LMkdir(L *lua.LState) int {
 	perm := L.CheckInt(2)
 	fmt.Printf("   mkdir %s \n", path)
 
-	if !IsSafe(path) {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("unsafe filepath"))
-		return 2
-	}
-
-	if err := os.MkdirAll(path, os.FileMode(perm)); err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString(err.Error()))
-		return 2
-	}
-
-	L.Push(lua.LTrue)
-	L.Push(lua.LNil)
-	return 2
-}
-
-func LCompile(L *lua.LState) int {
-	lang := L.CheckString(1)
-	args := []string{}
-	for i := 2; i <= L.GetTop(); i++ {
-
-		if strings.Contains(L.CheckString(i), "/") {
-
-			tryintoacess, err := filepath.Abs(filepath.Clean(filepath.Join(SandboxDir, L.CheckString(i))))
-			if err != nil {
-				L.Push(lua.LFalse)
-				L.Push(lua.LString(err.Error()))
-				return 2
-			}
-
-			rel, err := filepath.Rel(SandboxDir, tryintoacess)
-			if err != nil || strings.HasPrefix(rel, "..") {
-				L.Push(lua.LFalse)
-				L.Push(lua.LString("unsafe filepath"))
-				return 2
-			}
-		}
-
-		args = append(args, L.CheckString(i))
-	}
-
-	bin, suc := AllowedCmds[lang]
-	if !suc {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString("unsupported language"))
-		return 2
-	}
-
-	cmd := exec.Command(bin, args...)
-	cmd.Dir = SandboxDir
-	out, err := cmd.CombinedOutput()
-	fmt.Printf("   compiling with %s", bin)
-	if err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString(err.Error() + "\n" + string(out)))
-		return 2
-	}
-	if err := cmd.Run(); err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString(err.Error()))
-		return 2
-	}
-
-	L.Push(lua.LTrue)
-	L.Push(lua.LString(string(out)))
-	return 2
-}
-
-func LCompileRequirements(L *lua.LState) int {
-
-	cmdLang := L.CheckString(1)
-
-	if strings.Contains(L.CheckString(2), "/") {
-
-		tryintoacess, err := filepath.Abs(filepath.Clean(L.CheckString(2)))
-		if err != nil {
-			L.Push(lua.LFalse)
-			L.Push(lua.LString(err.Error()))
-			return 2
-		}
-		if !strings.HasPrefix(tryintoacess, SandboxDir) {
+	/*
+		if !IsSafe(path) {
 			L.Push(lua.LFalse)
 			L.Push(lua.LString("unsafe filepath"))
 			return 2
 		}
-	}
+	*/
 
-	var err error
-
-	fmt.Printf("   installing requirements with %s", cmdLang)
-	switch cmdLang {
-	case "python":
-		cmd := exec.Command("pip", "install", "--target", filepath.Join(SandboxDir, "tmp/build"), "-r", L.CheckString(2))
-		cmd.Dir = filepath.Join(SandboxDir, "data")
-		err = cmd.Run()
-	case "java":
-		cmd := exec.Command("mvn", "dependency:copy-dependencies", "-DoutputDirectory="+filepath.Join(SandboxDir, "tmp/build"))
-		cmd.Dir = L.CheckString(2)
-		err = cmd.Run()
-	case "ruby":
-		cmd := exec.Command("bundle", "install", "--path", filepath.Join(SandboxDir, "tmp/build"))
-		cmd.Dir = L.CheckString(2)
-		err = cmd.Run()
-	}
-
-	if err != nil {
+	if err := os.MkdirAll(path, os.FileMode(perm)); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString(err.Error()))
 		return 2

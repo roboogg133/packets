@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"packets/internal/utils"
+	"runtime"
 
 	utils_lua "packets/internal/utils/lua"
 	"path/filepath"
@@ -31,6 +32,11 @@ func InstallPackage(file []byte, destDir string) error {
 
 	tarReader := tar.NewReader(zstdReader)
 
+	uid, err := utils.GetPacketsUID()
+	if err != nil {
+		return err
+	}
+
 	for {
 		hdr, err := tarReader.Next()
 		if err == io.EOF {
@@ -46,7 +52,11 @@ func InstallPackage(file []byte, destDir string) error {
 			continue
 		}
 
-		if err := os.MkdirAll(destDir, 0755); err != nil {
+		if err := os.MkdirAll(destDir, 0775); err != nil {
+			return err
+		}
+
+		if err := os.Chown(destDir, uid, 0); err != nil {
 			return err
 		}
 
@@ -56,13 +66,16 @@ func InstallPackage(file []byte, destDir string) error {
 
 		case tar.TypeDir:
 			err = os.MkdirAll(absPath, os.FileMode(hdr.Mode))
-
 			if err != nil {
+				return err
+			}
+			if err := os.Chown(absPath, uid, 0); err != nil {
 				return err
 			}
 
 		case tar.TypeReg:
-			err = os.MkdirAll(filepath.Dir(absPath), 0755)
+
+			err = os.MkdirAll(filepath.Dir(absPath), 0775)
 			if err != nil {
 				return err
 			}
@@ -78,9 +91,20 @@ func InstallPackage(file []byte, destDir string) error {
 				return err
 			}
 
-			err = os.Chmod(absPath, os.FileMode(hdr.Mode))
+			err = os.Chmod(absPath, os.FileMode(0775))
 			if err != nil {
 				return err
+			}
+
+			if filepath.Base(hdr.Name) == "manifest.toml" || filepath.Base(hdr.Name) == manifest.Hooks.Install || filepath.Base(hdr.Name) == manifest.Hooks.Remove {
+				err = os.Chmod(absPath, os.FileMode(0755))
+				if err != nil {
+					return err
+				}
+			} else {
+				if err := os.Chown(absPath, uid, 0); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -92,7 +116,17 @@ func InstallPackage(file []byte, destDir string) error {
 	L.SetGlobal("data_dir", lua.LString(filepath.Join(destDir, "data")))
 	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
 
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	if err := utils.ChangeToNoPermission(); err != nil {
+		return err
+	}
 	if err := L.DoFile(filepath.Join(destDir, manifest.Hooks.Install)); err != nil {
+		return err
+	}
+
+	if err := utils.ElevatePermission(); err != nil {
 		return err
 	}
 
@@ -111,7 +145,18 @@ func ExecuteRemoveScript(path string) error {
 	L.SetGlobal("script", lua.LString(path))
 	L.SetGlobal("build", lua.LNil)
 
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	if err := utils.ChangeToNoPermission(); err != nil {
+		return err
+	}
+
 	if err := L.DoFile(path); err != nil {
+		return err
+	}
+
+	if err := utils.ElevatePermission(); err != nil {
 		return err
 	}
 

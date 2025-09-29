@@ -28,16 +28,6 @@ func GetSandBox(sandboxdir string) (lua.LState, error) {
 	L.SetGlobal("path_join", L.NewFunction(Ljoin))
 
 	// Packets build functions
-	build := L.NewTable()
-
-	L.SetField(build, "requirements", L.NewFunction(LCompileRequirements))
-	L.SetField(build, "compile", L.NewFunction(LCompile))
-
-	L.SetGlobal("build", build)
-
-	osObject.RawSetString("execute", lua.LNil)
-	osObject.RawSetString("exit", lua.LNil)
-	osObject.RawSetString("getenv", lua.LNil)
 
 	osObject.RawSetString("remove", L.NewFunction(LSafeRemove))
 	osObject.RawSetString("rename", L.NewFunction(LSafeRename))
@@ -53,7 +43,7 @@ func GetSandBox(sandboxdir string) (lua.LState, error) {
 	ioObject.RawSetString("stderr", lua.LNil)
 	ioObject.RawSetString("stdin", lua.LNil)
 	ioObject.RawSetString("lines", lua.LNil)
-	ioObject.RawSetString("open", L.NewFunction(LOpen))
+	//ioObject.RawSetString("open", L.NewFunction(LOpen))
 
 	return *L, nil
 }
