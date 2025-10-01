@@ -37,7 +37,7 @@ type Package struct {
 	Arch           string
 	Filename       string
 	Size           int64
-	Dependencies   string
+	Dependencies   map[string]string
 
 	Signature []byte
 	PublicKey ed25519.PublicKey
@@ -213,20 +213,19 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 		if !success {
 			_, err := db.Exec("DELETE FROM packages WHERE id = ?", p.Manifest.Info.Id)
 			if err != nil {
-				log.Println("Failed to rollback package addition:", err)
+				log.Println("failed to rollback package addition:", err)
 			}
 		}
 	}()
 
 	_, err = db.Exec(`
     INSERT INTO packages (
-        query_name, id, version, dependencies, description,
+        query_name, id, version, description,
         family, serial, package_d, filename, os, arch, in_cache
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.QueryName,
 		p.Manifest.Info.Id,
 		p.Version,
-		p.Dependencies,
 		p.Description,
 		p.Family,
 		p.Serial,
@@ -239,6 +238,11 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 	if err != nil {
 		return err
 	}
+
+	for depnId, versionConstraint := range p.Dependencies {
+		_, err = db.Exec("INSERT INTO package_dependencies (package_id, dependencie_id, version_constraint) VALUES (?, ?, ?)", p.Manifest.Info.Id, depnId, versionConstraint)
+	}
+
 	success = true
 	return err
 }
@@ -259,20 +263,40 @@ func CheckIfPackageInstalled(name string) (bool, error) {
 	return exists, nil
 }
 
-func GetDependencies(name string) ([]string, error) {
+func GetDependencies(id string) (map[string]string, error) {
 	db, err := sql.Open("sqlite", consts.IndexDB)
 	if err != nil {
-		return []string{}, err
+		return map[string]string{}, err
 	}
 	defer db.Close()
 
-	var dependenciesRaw string
+	rows, err := db.Query("SELECT dependency_id, version_constraint FROM package_dependencies WHERE package_id = ?", id)
+	if err != nil {
+		return map[string]string{}, err
+	}
+	defer rows.Close()
 
-	if err := db.QueryRow("SELECT dependencies FROM packages WHERE id = ?", name).Scan(&dependenciesRaw); err != nil {
-		return []string{}, err
+	dependencies := make(map[string]string)
+
+	for rows.Next() {
+		var a, versionConstraint string
+		if err := rows.Scan(&a, &versionConstraint); err != nil {
+			return map[string]string{}, err
+		}
+		dependencies[a] = versionConstraint
 	}
 
-	return strings.Fields(dependenciesRaw), nil
+	return dependencies, nil
+
+}
+
+func ResolvDependencies(depnList map[string]string) ([]Package, error) {
+	db, err := sql.Open("sqlite", consts.IndexDB)
+	if err != nil {
+		return map[string]string{}, err
+	}
+
+	return []Package{}, nil
 }
 
 func ManifestFileRead(file io.Reader) (configs.Manifest, error) {
@@ -287,13 +311,13 @@ func ManifestFileRead(file io.Reader) (configs.Manifest, error) {
 	return manifest, nil
 }
 
-func RemoveFromInstalledDB(name string) error {
+func RemoveFromInstalledDB(id string) error {
 	db, err := sql.Open("sqlite", consts.InstalledDB)
 	if err != nil {
 		return err
 	}
 
-	if _, err = db.Exec("DELETE FROM packages WHERE id = ?", name); err != nil {
+	if _, err = db.Exec("DELETE FROM packages WHERE id = ?", id); err != nil {
 		return err
 	}
 
@@ -301,7 +325,7 @@ func RemoveFromInstalledDB(name string) error {
 }
 
 // GetPackage retrieves package information from the index database and downloads the package file
-func GetPackage(name string) (Package, error) {
+func GetPackage(id string) (Package, error) {
 
 	var this Package
 	var peers []Peer
@@ -313,7 +337,7 @@ func GetPackage(name string) (Package, error) {
 	defer db.Close()
 
 	var packageUrl string
-	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, family, serial, size, dependencies FROM packages WHERE id = ?", name).
+	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, family, serial, size FROM packages WHERE id = ?", id).
 		Scan(
 			&this.QueryName,
 			&this.Version,
@@ -329,10 +353,24 @@ func GetPackage(name string) (Package, error) {
 			&this.Family,
 			&this.Serial,
 			&this.Size,
-			&this.Dependencies,
 		)
 	if err != nil {
 		return Package{}, err
+	}
+
+	rows, err := db.Query("SELECT dependency_id, version_constraint FROM package_dependencies WHERE package_id = ?", id)
+	if err != nil {
+		return Package{}, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var a, vConstraint string
+		if err := rows.Scan(&a, &vConstraint); err != nil {
+			return Package{}, err
+		}
+
+		this.Dependencies[a] = vConstraint
 	}
 
 	filename := path.Base(packageUrl)
