@@ -61,7 +61,7 @@ func init() {
 				log.Fatal(db)
 			}
 			defer db.Close()
-			db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,name            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, dependencies    TEXT NOT NULL DEFAULT '', description     TEXT NOT NULL, family          TEXT NOT NULL, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL)")
+			db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,id            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, dependencies    TEXT NOT NULL DEFAULT '', description     TEXT NOT NULL, family          TEXT NOT NULL, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL)")
 		} else {
 			log.Fatal(err)
 		}
@@ -250,7 +250,7 @@ var installCmd = &cobra.Command{
 
 			}
 
-			rows, err := db.Query("SELECT name, version, description FROM packages WHERE query_name = ?", inputName)
+			rows, err := db.Query("SELECT id, version, description FROM packages WHERE query_name = ?", inputName)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -509,7 +509,7 @@ var listCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		rows, err := db.Query("SELECT query_name, name, version, description, package_d, os, arch FROM packages")
+		rows, err := db.Query("SELECT query_name, id, version, description, package_d, os, arch FROM packages")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -546,14 +546,14 @@ var searchCmd = &cobra.Command{
 		var rows *sql.Rows
 
 		if len(args) > 0 {
-			rows, err = db.Query("SELECT query_name, name, version, description, os, arch FROM packages WHERE name LIKE ? OR description LIKE ? OR query_name LIKE ?", args[0], args[0], args[0])
+			rows, err = db.Query("SELECT query_name, id, version, description, os, arch FROM packages WHERE name LIKE ? OR description LIKE ? OR query_name LIKE ?", args[0], args[0], args[0])
 			if err != nil {
 				log.Fatal(err)
 			}
 			defer rows.Close()
 		} else {
 
-			rows, err = db.Query("SELECT query_name, name, version, description, os, arch FROM packages")
+			rows, err = db.Query("SELECT query_name, id, version, description, os, arch FROM packages")
 			if err != nil {
 				log.Fatal(err)
 			}

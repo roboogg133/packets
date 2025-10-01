@@ -1,26 +1,34 @@
-CREATE TABLE packages(
+CREATE TABLE packages (
+    id              TEXT NOT NULL UNIQUE PRIMARY KEY,
     query_name      TEXT NOT NULL,
-    image_url       TEXT NOT NULL,
-    name            TEXT NOT NULL UNIQUE PRIMARY KEY,
     version         TEXT NOT NULL,
+    serial          INTEGER NOT NULL,
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    image_url       TEXT NOT NULL,
+    package_url     TEXT NOT NULL,
     public_key      BLOB NOT NULL,
     signature       BLOB NOT NULL,
-    description     TEXT NOT NULL,
-    dependencies    TEXT NOT NULL DEFAULT '',
-    package_url     TEXT NOT NULL,
     author          TEXT NOT NULL,
     author_verified INTEGER NOT NULL DEFAULT 0,
-    family          TEXT NOT NULL,
     arch            TEXT NOT NULL,
     os              TEXT NOT NULL,
     size            INTEGER NOT NULL DEFAULT 0,
-    serial          INTEGER NOT NULL
+
+    UNIQUE(query_name, version),
+    UNIQUE(query_name, serial)
+);
+
+CREATE TABLE package_dependencies(
+    package_id TEXT NOT NULL,
+    dependencie_id TEXT NOT NULL,
+    version_constraint TEXT NOT NULL
 );
 
 
 CREATE TABLE IF NOT EXISTS packages (
     query_name      TEXT NOT NULL,
-    name            TEXT NOT NULL UNIQUE PRIMARY KEY, 
+    id           TEXT NOT NULL UNIQUE PRIMARY KEY, 
     version         TEXT NOT NULL, 
     dependencies    TEXT NOT NULL DEFAULT '', 
     description     TEXT NOT NULL,

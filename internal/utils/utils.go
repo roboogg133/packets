@@ -211,7 +211,7 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 
 	defer func() {
 		if !success {
-			_, err := db.Exec("DELETE FROM packages WHERE name = ?", p.Manifest.Info.Name)
+			_, err := db.Exec("DELETE FROM packages WHERE id = ?", p.Manifest.Info.Id)
 			if err != nil {
 				log.Println("Failed to rollback package addition:", err)
 			}
@@ -220,11 +220,11 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 
 	_, err = db.Exec(`
     INSERT INTO packages (
-        query_name, name, version, dependencies, description,
+        query_name, id, version, dependencies, description,
         family, serial, package_d, filename, os, arch, in_cache
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.QueryName,
-		p.Manifest.Info.Name,
+		p.Manifest.Info.Id,
 		p.Version,
 		p.Dependencies,
 		p.Description,
@@ -251,7 +251,7 @@ func CheckIfPackageInstalled(name string) (bool, error) {
 	defer db.Close()
 
 	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE name = ?)", name).Scan(&exists)
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE id = ?)", name).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -268,7 +268,7 @@ func GetDependencies(name string) ([]string, error) {
 
 	var dependenciesRaw string
 
-	if err := db.QueryRow("SELECT dependencies FROM packages WHERE name = ?", name).Scan(&dependenciesRaw); err != nil {
+	if err := db.QueryRow("SELECT dependencies FROM packages WHERE id = ?", name).Scan(&dependenciesRaw); err != nil {
 		return []string{}, err
 	}
 
@@ -293,7 +293,7 @@ func RemoveFromInstalledDB(name string) error {
 		return err
 	}
 
-	if _, err = db.Exec("DELETE FROM packages WHERE name = ?", name); err != nil {
+	if _, err = db.Exec("DELETE FROM packages WHERE id = ?", name); err != nil {
 		return err
 	}
 
@@ -313,7 +313,7 @@ func GetPackage(name string) (Package, error) {
 	defer db.Close()
 
 	var packageUrl string
-	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, family, serial, size, dependencies FROM packages WHERE name = ?", name).
+	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, family, serial, size, dependencies FROM packages WHERE id = ?", name).
 		Scan(
 			&this.QueryName,
 			&this.Version,

@@ -3,6 +3,7 @@ package configs
 type Manifest struct {
 	Info struct {
 		Name         string   `toml:"name"`
+		Id           string   `toml:"id"`
 		Version      string   `toml:"version"`
 		Description  string   `toml:"description"`
 		Dependencies []string `toml:"dependencies"`
