@@ -21,13 +21,13 @@ CREATE TABLE packages (
 
 CREATE TABLE package_dependencies(
     package_id TEXT NOT NULL,
-    dependency_id TEXT NOT NULL,
+    dependency_name TEXT NOT NULL,
     version_constraint TEXT NOT NULL,
-    
-    PRIMARY KEY (package_id, dependencie_id)
+
+    PRIMARY KEY (package_id, dependency_name)
 );
 
-CREATE INDEX index_dependency_id ON package_dependencies(dependency_id);
+CREATE INDEX index_dependency_name ON package_dependencies(dependency_name);
 
 
 CREATE TABLE IF NOT EXISTS packages (

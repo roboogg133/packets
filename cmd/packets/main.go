@@ -61,7 +61,9 @@ func init() {
 				log.Fatal(db)
 			}
 			defer db.Close()
-			db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,id            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, dependencies    TEXT NOT NULL DEFAULT '', description     TEXT NOT NULL, family          TEXT NOT NULL, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL)")
+			if _, err := db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,id            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, description     TEXT NOT NULL, family          TEXT NOT NULL, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL);  CREATE TABLE IF NOT EXISTS package_dependencies( package_id TEXT NOT NULL, dependency_name TEXT NOT NULL, version_constraint TEXT NOT NULL, PRIMARY KEY (package_id, dependency_name)); CREATE INDEX index_dependency_name ON package_dependencies(dependency_name);"); err != nil {
+				log.Fatal(err)
+			}
 		} else {
 			log.Fatal(err)
 		}
@@ -195,7 +197,7 @@ var installCmd = &cobra.Command{
 					continue
 				}
 				fmt.Printf("Checking dependencies of (%s)\n", inputName)
-				dependencies, err := utils.GetDependencies(inputName)
+				dependencies, err := utils.GetDependencies(db, inputName)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -283,7 +285,7 @@ var installCmd = &cobra.Command{
 				}
 
 				fmt.Printf("Checking dependencies of (%s)\n", pkgs[0].Name)
-				dependencies, err := utils.GetDependencies(pkgs[0].Name)
+				dependencies, err := utils.GetDependencies(db, pkgs[0].Name)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -367,7 +369,7 @@ var installCmd = &cobra.Command{
 				}
 
 				fmt.Printf("Checking dependencies of (%s)\n", pkgs[choice].Name)
-				dependencies, err := utils.GetDependencies(pkgs[choice].Name)
+				dependencies, err := utils.GetDependencies(db, pkgs[choice].Name)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -591,34 +593,42 @@ func AyncFullInstall(dep string, storePackages bool, installPath string, wg *syn
 		return
 	}
 
-	fmt.Printf(" Installing %s \n", dep)
-	if err := packets.InstallPackage(p.PackageF, installPath); err != nil {
-		log.Fatal(err)
+	allDependencies, err := utils.ResolvDependencies(p.Dependencies)
+	if err != nil {
+		log.Println(err)
+		return
 	}
+	for _, dep := range allDependencies {
 
-	if storePackages {
-		_, err := p.Write()
-		if err != nil {
-			log.Println(err)
-			return
+		fmt.Printf(" Installing %s \n", dep)
+		if err := packets.InstallPackage(p.PackageF, installPath); err != nil {
+			log.Fatal(err)
 		}
-		mu.Lock()
-		defer mu.Unlock()
 
-		err = p.AddToInstalledDB(1, installPath)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-	} else {
+		if storePackages {
+			_, err := p.Write()
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			mu.Lock()
+			defer mu.Unlock()
 
-		mu.Lock()
-		defer mu.Unlock()
+			err = p.AddToInstalledDB(1, installPath)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		} else {
 
-		err := p.AddToInstalledDB(0, installPath)
-		if err != nil {
-			log.Println(err)
-			return
+			mu.Lock()
+			defer mu.Unlock()
+
+			err := p.AddToInstalledDB(0, installPath)
+			if err != nil {
+				log.Println(err)
+				return
+			}
 		}
 	}
 }

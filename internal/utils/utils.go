@@ -239,8 +239,8 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 		return err
 	}
 
-	for depnId, versionConstraint := range p.Dependencies {
-		_, err = db.Exec("INSERT INTO package_dependencies (package_id, dependencie_id, version_constraint) VALUES (?, ?, ?)", p.Manifest.Info.Id, depnId, versionConstraint)
+	for depnName, versionConstraint := range p.Dependencies {
+		_, err = db.Exec("INSERT INTO package_dependencies (package_id, dependency_name, version_constraint) VALUES (?, ?, ?)", p.Manifest.Info.Id, depnName, versionConstraint)
 	}
 
 	success = true
@@ -263,14 +263,9 @@ func CheckIfPackageInstalled(name string) (bool, error) {
 	return exists, nil
 }
 
-func GetDependencies(id string) (map[string]string, error) {
-	db, err := sql.Open("sqlite", consts.IndexDB)
-	if err != nil {
-		return map[string]string{}, err
-	}
-	defer db.Close()
+func GetDependencies(db *sql.DB, id string) (map[string]string, error) {
 
-	rows, err := db.Query("SELECT dependency_id, version_constraint FROM package_dependencies WHERE package_id = ?", id)
+	rows, err := db.Query("SELECT dependency_name, version_constraint FROM package_dependencies WHERE package_id = ?", id)
 	if err != nil {
 		return map[string]string{}, err
 	}
@@ -290,13 +285,60 @@ func GetDependencies(id string) (map[string]string, error) {
 
 }
 
-func ResolvDependencies(depnList map[string]string) ([]Package, error) {
+func ResolvDependencies(depnList map[string]string) ([]string, error) {
 	db, err := sql.Open("sqlite", consts.IndexDB)
 	if err != nil {
-		return map[string]string{}, err
+		return []string{}, err
+	}
+	defer db.Close()
+
+	var resolved []string
+	for dependencieName, constraint := range depnList {
+
+		var filter, order string
+		value := strings.TrimLeft(constraint, "<>=")
+
+		switch {
+		case strings.HasPrefix(constraint, ">"):
+			filter = fmt.Sprintf("AND serial > %s", value)
+			order = "ORDER BY serial ASC LIMIT 1"
+		case strings.HasPrefix(constraint, "<="):
+			filter = fmt.Sprintf("AND serial <= %s", value)
+			order = "ORDER BY serial DESC LIMIT 1"
+		case strings.HasPrefix(constraint, "<"):
+			filter = fmt.Sprintf("AND serial < %s", value)
+			order = "ORDER BY serial DESC LIMIT 1"
+		case strings.HasPrefix(constraint, "="):
+			filter = fmt.Sprintf("AND serial = %s", value)
+			order = ""
+		}
+
+		var packageId string
+
+		err := db.QueryRow(fmt.Sprintf("SELECT id FROM packages WHERE query_name = ? %s %s", filter, order), dependencieName).Scan(&packageId)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				continue
+			}
+			return []string{}, err
+		}
+
+		resolved = append(resolved, packageId)
+
+		dp, err := GetDependencies(db, packageId)
+		if err != nil {
+			return resolved, err
+		}
+
+		depn, err := ResolvDependencies(dp)
+		if err != nil {
+			return resolved, err
+		}
+
+		resolved = append(resolved, depn...)
 	}
 
-	return []Package{}, nil
+	return resolved, nil
 }
 
 func ManifestFileRead(file io.Reader) (configs.Manifest, error) {
@@ -358,7 +400,7 @@ func GetPackage(id string) (Package, error) {
 		return Package{}, err
 	}
 
-	rows, err := db.Query("SELECT dependency_id, version_constraint FROM package_dependencies WHERE package_id = ?", id)
+	rows, err := db.Query("SELECT dependency_name, version_constraint FROM package_dependencies WHERE package_id = ?", id)
 	if err != nil {
 		return Package{}, err
 	}

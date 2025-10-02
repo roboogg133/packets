@@ -14,23 +14,6 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-var SandboxDir string
-
-var AllowedCmds = map[string]string{
-	"go":          "go",          // "Go code compiler"
-	"gcc":         "gcc",         // "C"
-	"g++":         "g++",         // "C++"
-	"rustc":       "rustc",       // "Rust"
-	"javac":       "javac",       // "Java"
-	"luac":        "luac",        // "Lua"
-	"pyinstaller": "pyinstaller", // "Python"
-	"kotlinc":     "kotlinc",     // "Kotlin"
-	"mcs":         "mcs",         // "C# compiler"
-	"swiftc":      "swiftc",      // "Swift compiler"
-	"tsc":         "tsc",         // "TypeScript compiler"
-	"rubyc":       "rubyc",       // "Ruby compiler"
-}
-
 func IsSafe(str string) bool {
 	s, err := filepath.EvalSymlinks(filepath.Clean(str))
 	if err != nil {
