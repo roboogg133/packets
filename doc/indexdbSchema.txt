@@ -31,8 +31,8 @@ CREATE INDEX index_dependency_name ON package_dependencies(dependency_name);
 
 
 CREATE TABLE IF NOT EXISTS packages (
-    query_name      TEXT NOT NULL,
-    id           TEXT NOT NULL UNIQUE PRIMARY KEY, 
+    query_name      TEXT NOT NULL UNIQUE PRIMARY KEY,
+    id              TEXT NOT NULL UNIQUE, 
     version         TEXT NOT NULL, 
     dependencies    TEXT NOT NULL DEFAULT '', 
     description     TEXT NOT NULL,

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"crypto/ed25519"
 	"database/sql"
 	_ "embed"
 	"fmt"
@@ -20,9 +19,6 @@ import (
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
-
-//go:embed ed25519public_key.pem
-var publicKey []byte
 
 // init is doing some verifications
 func init() {
@@ -61,7 +57,7 @@ func init() {
 				log.Fatal(db)
 			}
 			defer db.Close()
-			if _, err := db.Exec("CREATE TABLE IF NOT EXISTS packages (query_name      TEXT NOT NULL,id            TEXT NOT NULL UNIQUE PRIMARY KEY, version         TEXT NOT NULL, description     TEXT NOT NULL, family          TEXT NOT NULL, package_d       TEXT NOT NULL, filename        TEXT NOT NULL, os              TEXT NOT NULL, arch            TEXT NOT NULL, in_cache        INTEGER NOT NULL DEFAULT 1, serial          INTEGER NOT NULL);  CREATE TABLE IF NOT EXISTS package_dependencies( package_id TEXT NOT NULL, dependency_name TEXT NOT NULL, version_constraint TEXT NOT NULL, PRIMARY KEY (package_id, dependency_name)); CREATE INDEX index_dependency_name ON package_dependencies(dependency_name);"); err != nil {
+			if _, err := db.Exec(consts.InstalledDatabaseSchema); err != nil {
 				log.Fatal(err)
 			}
 		} else {
@@ -119,21 +115,6 @@ var syncCmd = &cobra.Command{
 		DBB, err := utils.GetFileHTTP(syncUrl)
 		if err != nil {
 			log.Fatal(err)
-		}
-		databaseSig, err := utils.GetFileHTTP(syncUrl + ".sig")
-		if err != nil {
-			log.Fatal(err)
-		}
-		if syncUrl == consts.DefaultSyncUrl {
-			if !ed25519.Verify(publicKey, DBB, databaseSig) {
-				log.Printf("Signature verification failed for the **MAIN** respository [ %s ], the index.db file may be compromised, do wish to continue? (y/N)\n", syncUrl)
-				fmt.Print(">> ")
-				var a string
-				fmt.Scanf("%s", &a)
-				if a != "y" && a != "Y" {
-					log.Fatalf("aborting, try googling to know about [ %s ]\n", syncUrl)
-				}
-			}
 		}
 
 		if err := os.WriteFile(consts.IndexDB, DBB, 0774); err != nil {
@@ -197,7 +178,12 @@ var installCmd = &cobra.Command{
 					continue
 				}
 				fmt.Printf("Checking dependencies of (%s)\n", inputName)
-				dependencies, err := utils.GetDependencies(db, inputName)
+				dependenciesRaw, err := utils.GetDependencies(db, inputName)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				dependencies, err := utils.ResolvDependencies(dependenciesRaw)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -285,7 +271,12 @@ var installCmd = &cobra.Command{
 				}
 
 				fmt.Printf("Checking dependencies of (%s)\n", pkgs[0].Name)
-				dependencies, err := utils.GetDependencies(db, pkgs[0].Name)
+				dependenciesRaw, err := utils.GetDependencies(db, inputName)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				dependencies, err := utils.ResolvDependencies(dependenciesRaw)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -369,7 +360,12 @@ var installCmd = &cobra.Command{
 				}
 
 				fmt.Printf("Checking dependencies of (%s)\n", pkgs[choice].Name)
-				dependencies, err := utils.GetDependencies(db, pkgs[choice].Name)
+				dependenciesRaw, err := utils.GetDependencies(db, inputName)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				dependencies, err := utils.ResolvDependencies(dependenciesRaw)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -461,7 +457,7 @@ var removeCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 				var packageDir string
-				if err := db.QueryRow("SELECT package_d FROM packages WHERE name = ?", pkgName).Scan(&packageDir); err != nil {
+				if err := db.QueryRow("SELECT package_d FROM packages WHERE query_name = ? OR id = ?", pkgName, pkgName).Scan(&packageDir); err != nil {
 					log.Fatal(err)
 				}
 
@@ -524,7 +520,7 @@ var listCmd = &cobra.Command{
 			if err := rows.Scan(&queryName, &name, &version, &description, &packageDir, &os, &arch); err != nil {
 				log.Fatal(err)
 			}
-			fmt.Printf("  Package %s \n   ├──Query name: %s\n   ├──Version: %s \n   ├──Package dir: %s\n   ├──OS: %s\n   ├──Arch: %s\n   └──Description: %s\n", name, queryName, version, packageDir, os, arch, description)
+			fmt.Printf("  Package %s \n   ├──Id: %s\n   ├──Version: %s \n   ├──Package dir: %s\n   ├──OS: %s\n   ├──Arch: %s\n   └──Description: %s\n", queryName, name, version, packageDir, os, arch, description)
 		}
 	},
 }
@@ -586,49 +582,40 @@ func main() {
 func AyncFullInstall(dep string, storePackages bool, installPath string, wg *sync.WaitGroup, mu *sync.Mutex) {
 	defer wg.Done()
 
-	fmt.Printf(" Downloading %s \n", dep)
+	fmt.Printf(" downloading %s \n", dep)
 	p, err := utils.GetPackage(dep)
 	if err != nil {
-		log.Println(err)
-		return
+		log.Fatal(err)
 	}
 
-	allDependencies, err := utils.ResolvDependencies(p.Dependencies)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	for _, dep := range allDependencies {
+	fmt.Printf(" installing %s \n", dep)
 
-		fmt.Printf(" Installing %s \n", dep)
-		if err := packets.InstallPackage(p.PackageF, installPath); err != nil {
+	if err := packets.InstallPackage(p.PackageF, installPath); err != nil {
+		log.Fatal(err)
+	}
+	if storePackages {
+		_, err := p.Write()
+		if err != nil {
 			log.Fatal(err)
+			return
 		}
+		mu.Lock()
+		defer mu.Unlock()
 
-		if storePackages {
-			_, err := p.Write()
-			if err != nil {
-				log.Println(err)
-				return
-			}
-			mu.Lock()
-			defer mu.Unlock()
+		err = p.AddToInstalledDB(1, installPath)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+	} else {
 
-			err = p.AddToInstalledDB(1, installPath)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-		} else {
+		mu.Lock()
+		defer mu.Unlock()
 
-			mu.Lock()
-			defer mu.Unlock()
-
-			err := p.AddToInstalledDB(0, installPath)
-			if err != nil {
-				log.Println(err)
-				return
-			}
+		err := p.AddToInstalledDB(0, installPath)
+		if err != nil {
+			log.Println(err)
+			return
 		}
 	}
 }

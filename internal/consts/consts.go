@@ -13,3 +13,30 @@ const (
 	InstalledDB     = "/etc/packets/installed.db"
 	DefaultSyncUrl  = "https://servidordomal.fun/index.db"
 )
+
+const InstalledDatabaseSchema = `CREATE TABLE IF NOT EXISTS packages (
+    query_name      TEXT NOT NULL UNIQUE PRIMARY KEY,
+    id              TEXT NOT NULL UNIQUE, 
+    version         TEXT NOT NULL, 
+    dependencies    TEXT NOT NULL DEFAULT '', 
+    description     TEXT NOT NULL,
+    family          TEXT NOT NULL,
+    serial          INTEGER NOT NULL UNIQUE, 
+    package_d       TEXT NOT NULL,
+    filename        TEXT NOT NULL,
+    os              TEXT NOT NULL,
+    arch            TEXT NOT NULL,
+    in_cache        INTEGER NOT NULL DEFAULT 1,
+    serial          INTEGER NOT NULL
+);
+
+CREATE TABLE package_dependencies(
+    package_id TEXT NOT NULL,
+    dependency_name TEXT NOT NULL,
+    version_constraint TEXT NOT NULL,
+
+    PRIMARY KEY (package_id, dependency_name)
+);
+
+CREATE INDEX index_dependency_name ON package_dependencies(dependency_name);
+`
