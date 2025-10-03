@@ -2,14 +2,12 @@ package configs
 
 type Manifest struct {
 	Info struct {
-		Name         string   `toml:"name"`
-		Id           string   `toml:"id"`
-		Version      string   `toml:"version"`
-		Description  string   `toml:"description"`
-		Dependencies []string `toml:"dependencies"`
-		Author       string   `toml:"author"`
-		Family       string   `toml:"family"`
-		Serial       uint     `toml:"serial"`
+		Name         string            `toml:"name"`
+		Id           string            `toml:"id"`
+		Version      string            `toml:"version"`
+		Description  string            `toml:"description"`
+		Dependencies map[string]string `toml:"dependencies"`
+		Author       string            `toml:"author"`
 	} `toml:"Info"`
 	Hooks struct {
 		Install string `toml:"install"`
