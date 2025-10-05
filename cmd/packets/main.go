@@ -87,6 +87,8 @@ func init() {
 			log.Fatal(err)
 		}
 	}
+
+	_ = os.MkdirAll("/var/lib/packets", 0777)
 }
 
 // COBRA CMDS
