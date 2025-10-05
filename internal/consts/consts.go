@@ -21,7 +21,6 @@ const InstalledDatabaseSchema = `CREATE TABLE IF NOT EXISTS packages (
     dependencies    TEXT NOT NULL DEFAULT '', 
     description     TEXT NOT NULL,
     family          TEXT NOT NULL,
-    serial          INTEGER NOT NULL UNIQUE, 
     package_d       TEXT NOT NULL,
     filename        TEXT NOT NULL,
     os              TEXT NOT NULL,
