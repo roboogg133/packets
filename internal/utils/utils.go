@@ -44,7 +44,6 @@ type Package struct {
 
 	Manifest configs.Manifest
 
-	Family string
 	Serial int
 }
 
@@ -221,13 +220,12 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 	_, err = db.Exec(`
     INSERT INTO packages (
         query_name, id, version, description,
-        family, serial, package_d, filename, os, arch, in_cache
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        serial, package_d, filename, os, arch, in_cache
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.QueryName,
 		p.Manifest.Info.Id,
 		p.Version,
 		p.Description,
-		p.Family,
 		p.Serial,
 		packagePath,
 		p.Filename,
@@ -255,7 +253,7 @@ func CheckIfPackageInstalled(name string) (bool, error) {
 	defer db.Close()
 
 	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE id = ?)", name).Scan(&exists)
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE id = ? OR query_name = ?)", name, name).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
@@ -359,7 +357,7 @@ func RemoveFromInstalledDB(id string) error {
 		return err
 	}
 
-	if _, err = db.Exec("DELETE FROM packages WHERE id = ?", id); err != nil {
+	if _, err = db.Exec("DELETE FROM packages WHERE id = ? OR query_name = ?", id, id); err != nil {
 		return err
 	}
 
@@ -379,7 +377,7 @@ func GetPackage(id string) (Package, error) {
 	defer db.Close()
 
 	var packageUrl string
-	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, family, serial, size FROM packages WHERE id = ?", id).
+	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, serial, size FROM packages WHERE id = ?", id).
 		Scan(
 			&this.QueryName,
 			&this.Version,
@@ -392,7 +390,6 @@ func GetPackage(id string) (Package, error) {
 			&this.Arch,
 			&this.Signature,
 			&this.PublicKey,
-			&this.Family,
 			&this.Serial,
 			&this.Size,
 		)

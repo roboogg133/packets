@@ -20,13 +20,15 @@ const InstalledDatabaseSchema = `CREATE TABLE IF NOT EXISTS packages (
     version         TEXT NOT NULL, 
     dependencies    TEXT NOT NULL DEFAULT '', 
     description     TEXT NOT NULL,
-    family          TEXT NOT NULL,
     package_d       TEXT NOT NULL,
     filename        TEXT NOT NULL,
     os              TEXT NOT NULL,
     arch            TEXT NOT NULL,
     in_cache        INTEGER NOT NULL DEFAULT 1,
-    serial          INTEGER NOT NULL
+    serial          INTEGER NOT NULL,
+
+    UNIQUE(query_name, version),
+    UNIQUE(query_name, serial)
 );
 
 CREATE TABLE package_dependencies(
