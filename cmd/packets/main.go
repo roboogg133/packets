@@ -1,17 +1,19 @@
 package main
 
 import (
-	"bufio"
 	"database/sql"
 	_ "embed"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 
 	"packets/configs"
 	"packets/internal/consts"
+	errors_packets "packets/internal/errors"
 	"packets/internal/utils"
 	packets "packets/pkg"
 
@@ -160,9 +162,10 @@ var installCmd = &cobra.Command{
 		}
 
 		for _, inputName := range args {
+			runtime.GC()
 
 			var exist bool
-			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE name = ?)", inputName).Scan(&exist)
+			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE id = ?)", inputName).Scan(&exist)
 			if err != nil {
 				if err != sql.ErrNoRows {
 					log.Panic(err)
@@ -174,7 +177,7 @@ var installCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 				if installed {
-					log.Printf("package %s is already installed\n", inputName)
+					fmt.Printf("Package %s is already installed\n", inputName)
 					continue
 				}
 				fmt.Printf("Checking dependencies of (%s)\n", inputName)
@@ -201,7 +204,7 @@ var installCmd = &cobra.Command{
 					}
 					for _, depn := range dependencies {
 						wg.Add(1)
-						go AyncFullInstall(depn, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, inputName), &wg, &mu)
+						go AyncFullInstall(depn, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, depn), &wg, &mu)
 					}
 
 					wg.Wait()
@@ -237,193 +240,92 @@ var installCmd = &cobra.Command{
 				continue
 
 			}
+			var id string
+			err = db.QueryRow("SELECT id FROM packages WHERE query_name = ? ORDER BY serial DESC LIMIT 1", inputName).Scan(&id)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					log.Panicf("can't find any results for (%s)\n", inputName)
+				}
+				log.Fatal(err)
+			}
 
-			rows, err := db.Query("SELECT id, version, description FROM packages WHERE query_name = ?", inputName)
+			installed, err := utils.CheckIfPackageInstalled(inputName)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			defer rows.Close()
-
-			var pkgs []Quer1
-			for rows.Next() {
-				var q Quer1
-				if err := rows.Scan(&q.Name, &q.Version, &q.Description); err != nil {
-					log.Panic(err)
-				}
-				pkgs = append(pkgs, q)
-			}
-			switch len(pkgs) {
-			case 0:
-				log.Fatalf("can't find any results for (%s)\n", inputName)
-
-			case 1:
-				fmt.Printf(":: Founded 1 package for %s \n", inputName)
-
-				installed, err := utils.CheckIfPackageInstalled(pkgs[0].Name)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				if installed {
-					log.Printf("Package %s is already installed\n", pkgs[0].Name)
-					continue
-				}
-
-				fmt.Printf("Checking dependencies of (%s)\n", pkgs[0].Name)
-				dependenciesRaw, err := utils.GetDependencies(db, inputName)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				dependencies, err := utils.ResolvDependencies(dependenciesRaw)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				if len(dependencies) > 0 {
-					var wg sync.WaitGroup
-					var mu sync.Mutex
-
-					fmt.Printf(":: Packets will install %s and %d dependencies\nPackages to install:\n", pkgs[0].Name, len(dependencies))
-					fmt.Println(dependencies)
-					fmt.Println("Are you sure? (y/N)")
-					var a string
-					fmt.Scanf("%s", &a)
-					if a != "y" && a != "Y" {
-						os.Exit(1)
-					}
-					for _, depn := range dependencies {
-						wg.Add(1)
-						go AyncFullInstall(depn, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, inputName), &wg, &mu)
-					}
-
-					wg.Wait()
-
-				}
-
-				fmt.Printf("Downloading %s \n", pkgs[0].Name)
-				p, err := utils.GetPackage(pkgs[0].Name)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				cfg, err := configs.GetConfigTOML()
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				fmt.Printf(":: Installing %s \n", pkgs[0].Name)
-				if err := packets.InstallPackage(p.PackageF, filepath.Join(cfg.Config.Data_d, pkgs[0].Name)); err != nil {
-					log.Fatal(err)
-				}
-
-				if cfg.Config.StorePackages {
-					_, err := p.Write()
-					if err != nil {
-						log.Fatal(err)
-					}
-					err = p.AddToInstalledDB(1, filepath.Join(cfg.Config.Data_d, pkgs[0].Name))
-					if err != nil {
-						log.Fatal(err)
-					}
-				} else {
-					err := p.AddToInstalledDB(0, filepath.Join(cfg.Config.Data_d, pkgs[0].Name))
-					if err != nil {
-						log.Fatal(err)
-					}
-				}
-				continue
-
-			default:
-
-				fmt.Printf(":: Founded %d packages for (%s)\n Select 1 to install\n", len(pkgs), inputName)
-				for i, q := range pkgs {
-					fmt.Printf("[%d] %s : %s\n     %s\n", i, q.Name, q.Version, q.Description)
-				}
-				var choice int
-			optionagain:
-				fmt.Print(">> ")
-				fmt.Fscan(bufio.NewReader(os.Stdin), &choice)
-				if choice > len(pkgs) || choice < 0 {
-					fmt.Println("invalid option")
-					goto optionagain
-				}
-
-				installed, err := utils.CheckIfPackageInstalled(pkgs[choice].Name)
-				if err != nil {
-					log.Fatal(err)
-				}
-				if installed {
-					log.Printf("package %s is already installed\n", pkgs[choice].Name)
-					continue
-				}
-
-				fmt.Printf("Checking dependencies of (%s)\n", pkgs[choice].Name)
-				dependenciesRaw, err := utils.GetDependencies(db, inputName)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				dependencies, err := utils.ResolvDependencies(dependenciesRaw)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				if len(dependencies) > 0 {
-					var wg sync.WaitGroup
-					var mu sync.Mutex
-
-					fmt.Printf(":: Packets will install %s and %d dependencies\nPackages to install:\n", pkgs[choice].Name, len(dependencies))
-					fmt.Println(dependencies)
-					fmt.Println("Are you sure? (y/N)")
-					var a string
-					fmt.Scanf("%s", &a)
-					if a != "y" && a != "Y" {
-						os.Exit(1)
-					}
-					for _, depn := range dependencies {
-						wg.Add(1)
-						go AyncFullInstall(depn, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name), &wg, &mu)
-					}
-
-					wg.Wait()
-
-				}
-
-				fmt.Printf("Downloading %s \n", pkgs[choice].Name)
-				p, err := utils.GetPackage(pkgs[choice].Name)
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				cfg, err := configs.GetConfigTOML()
-				if err != nil {
-					log.Fatal(err)
-				}
-
-				fmt.Printf(":: Installing (%s) \n", pkgs[choice].Name)
-				if err := packets.InstallPackage(p.PackageF, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name)); err != nil {
-					log.Fatal(err)
-				}
-
-				if cfg.Config.StorePackages {
-					_, err := p.Write()
-					if err != nil {
-						log.Fatal(err)
-					}
-					err = p.AddToInstalledDB(1, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name))
-					if err != nil {
-						log.Fatal(err)
-					}
-				} else {
-					err := p.AddToInstalledDB(0, filepath.Join(cfg.Config.Data_d, pkgs[choice].Name))
-					if err != nil {
-						log.Fatal(err)
-					}
-				}
+			if installed {
+				fmt.Printf(":: Package %s is already installed, searching for upgrades...\n", inputName)
+				var wg sync.WaitGroup
+				var mu sync.Mutex
+				AsyncFullyUpgrade(inputName, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, id), &wg, &mu, db)
 				continue
 			}
+
+			fmt.Printf("Checking dependencies of (%s)\n", inputName)
+			dependenciesRaw, err := utils.GetDependencies(db, inputName)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			dependencies, err := utils.ResolvDependencies(dependenciesRaw)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if len(dependencies) > 0 {
+				var wg sync.WaitGroup
+				var mu sync.Mutex
+
+				fmt.Printf(":: Packets will install %s and %d dependencies\nPackages to install:\n", id, len(dependencies))
+				fmt.Println(dependencies)
+				fmt.Println("Are you sure? (y/N)")
+				var a string
+				fmt.Scanf("%s", &a)
+				if a != "y" && a != "Y" {
+					os.Exit(1)
+				}
+				for _, depn := range dependencies {
+					wg.Add(1)
+					go AyncFullInstall(depn, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, depn), &wg, &mu)
+				}
+
+				wg.Wait()
+
+			}
+
+			fmt.Printf("Downloading %s \n", inputName)
+			p, err := utils.GetPackage(id)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			cfg, err := configs.GetConfigTOML()
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			fmt.Printf(":: Installing %s \n", inputName)
+			if err := packets.InstallPackage(p.PackageF, filepath.Join(cfg.Config.Data_d, id)); err != nil {
+				log.Fatal(err)
+			}
+
+			if cfg.Config.StorePackages {
+				_, err := p.Write()
+				if err != nil {
+					log.Fatal(err)
+				}
+				err = p.AddToInstalledDB(1, filepath.Join(cfg.Config.Data_d, id))
+				if err != nil {
+					log.Fatal(err)
+				}
+			} else {
+				err := p.AddToInstalledDB(0, filepath.Join(cfg.Config.Data_d, id))
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+			continue
 		}
 	},
 }
@@ -618,4 +520,98 @@ func AyncFullInstall(dep string, storePackages bool, installPath string, wg *syn
 			return
 		}
 	}
+}
+
+func AsyncFullyUpgrade(queryName string, storePackages bool, installPath string, wg *sync.WaitGroup, mu *sync.Mutex, db *sql.DB) {
+	installed, err := utils.CheckIfPackageInstalled(queryName)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	if !installed {
+		log.Println(errors_packets.ErrNotInstalled)
+		return
+	}
+
+	idb, err := sql.Open("sqlite", consts.InstalledDB)
+	if err != nil {
+		log.Panic(err)
+		return
+	}
+
+	var oldSerial int
+	if err := idb.QueryRow("SELECT serial FROM packages WHERE query_name = ?", queryName).Scan(&oldSerial); err != nil {
+		log.Println(err)
+		return
+	}
+	var newSerial int
+	var id string
+	if err := db.QueryRow("SELECT serial, id FROM packages WHERE query_name = ? ORDER BY serial LIMIT 1", queryName).Scan(&newSerial, &id); err != nil {
+		log.Println(err)
+		return
+	}
+	if oldSerial == newSerial {
+		log.Println(errors_packets.ErrAlredyUpToDate)
+		return
+	}
+
+	var v int
+	if storePackages {
+		v = 1
+	} else {
+		v = 0
+	}
+
+	if err := UpgradeToThis(id, installPath, idb, v); err != nil {
+		log.Println(err)
+		return
+	}
+}
+
+func UpgradeToThis(id string, installPath string, installedDB *sql.DB, storePkgFile int) error {
+
+	p, err := utils.GetPackage(id)
+	if err != nil {
+		return err
+	}
+
+	query_name := strings.SplitN(id, "@", 2)[0]
+
+	var oldPath string
+	if err := installedDB.QueryRow("SELECT package_d FROM packages WHERE query_name = ?", query_name).Scan(&oldPath); err != nil {
+		return err
+	}
+
+	if err := os.Rename(oldPath, installPath); err != nil {
+		return err
+	}
+
+	if err := packets.InstallPackage(p.PackageF, installPath); err != nil {
+		if err := os.Rename(installPath, oldPath); err != nil {
+			return err
+		}
+		return err
+	}
+
+	_, err = installedDB.Exec(`
+    UPDATE packages 
+	SET query_name = ?, id = ?, version = ?, description = ?,
+        serial = ?, package_d = ?, filename = ?, os = ?, arch = ?, in_cache = ?
+   `,
+		p.QueryName,
+		p.Manifest.Info.Id,
+		p.Version,
+		p.Description,
+		p.Serial,
+		installPath,
+		p.Filename,
+		p.OS,
+		p.Arch,
+		storePkgFile,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -252,8 +252,12 @@ func CheckIfPackageInstalled(name string) (bool, error) {
 	}
 	defer db.Close()
 
+	if strings.Contains(name, "@") {
+		name = strings.SplitN(name, "@", 2)[0]
+	}
+
 	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE id = ? OR query_name = ?)", name, name).Scan(&exists)
+	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE query_name = ?)", name).Scan(&exists)
 	if err != nil {
 		return false, err
 	}
