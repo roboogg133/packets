@@ -105,11 +105,10 @@ var syncCmd = &cobra.Command{
 				log.Fatal("index.db does not exist, try to use \"packets sync\"")
 			}
 		}
-		f, err := os.OpenFile(consts.IndexDB, os.O_WRONLY, 0)
-		if err != nil {
-			log.Fatalf("can't open to write [ %s ]. Are you running packets as root?\n", consts.IndexDB)
+
+		if os.Getuid() != 0 {
+			log.Fatal("are you running packets as root?")
 		}
-		f.Close()
 
 		syncUrl := consts.DefaultSyncUrl
 		if len(args) > 0 {
