@@ -258,7 +258,9 @@ var installCmd = &cobra.Command{
 			if installed {
 				fmt.Printf(":: Package %s is already installed, searching for upgrades...\n", inputName)
 				var wg sync.WaitGroup
-				AsyncFullyUpgrade(inputName, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, id), &wg, db)
+				wg.Add(1)
+				go AsyncFullyUpgrade(inputName, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, id), &wg, db)
+				wg.Done()
 				continue
 			}
 
@@ -509,7 +511,7 @@ var upgradeCmd = &cobra.Command{
 
 		for _, v := range installedPackagesQName {
 			wg.Add(1)
-			AsyncFullyUpgrade(v, cfg.Config.StorePackages, cfg.Config.Data_d, &wg, db)
+			go AsyncFullyUpgrade(v, cfg.Config.StorePackages, cfg.Config.Data_d, &wg, db)
 		}
 		wg.Wait()
 	},
