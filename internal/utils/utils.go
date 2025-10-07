@@ -288,6 +288,11 @@ func GetDependencies(db *sql.DB, id string) (map[string]string, error) {
 }
 
 func ResolvDependencies(depnList map[string]string) ([]string, error) {
+
+	if len(depnList) > 0 {
+		return []string{}, nil
+	}
+
 	db, err := sql.Open("sqlite", consts.IndexDB)
 	if err != nil {
 		return []string{}, err
