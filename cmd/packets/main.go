@@ -258,8 +258,7 @@ var installCmd = &cobra.Command{
 			if installed {
 				fmt.Printf(":: Package %s is already installed, searching for upgrades...\n", inputName)
 				var wg sync.WaitGroup
-				var mu sync.Mutex
-				AsyncFullyUpgrade(inputName, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, id), &wg, &mu, db)
+				AsyncFullyUpgrade(inputName, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, id), &wg, db)
 				continue
 			}
 
@@ -473,6 +472,49 @@ var searchCmd = &cobra.Command{
 	},
 }
 
+var upgradeCmd = &cobra.Command{
+	Use:   "upgrade",
+	Args:  cobra.NoArgs,
+	Short: "upgrade all installed packages",
+	Run: func(cmd *cobra.Command, args []string) {
+
+		cfg, err := configs.GetConfigTOML()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		db, err := sql.Open("sqlite", consts.InstalledDB)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer db.Close()
+
+		rows, err := db.Query("SELECT query_name FROM packages")
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer rows.Close()
+
+		var installedPackagesQName []string
+		for rows.Next() {
+			var queryName string
+			if err := rows.Scan(&queryName); err != nil {
+				log.Fatal(err)
+			}
+
+			installedPackagesQName = append(installedPackagesQName, queryName)
+		}
+
+		var wg sync.WaitGroup
+
+		for _, v := range installedPackagesQName {
+			wg.Add(1)
+			AsyncFullyUpgrade(v, cfg.Config.StorePackages, cfg.Config.Data_d, &wg, db)
+		}
+		wg.Wait()
+	},
+}
+
 func main() {
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(removeCmd)
@@ -523,7 +565,8 @@ func AyncFullInstall(dep string, storePackages bool, installPath string, wg *syn
 	}
 }
 
-func AsyncFullyUpgrade(queryName string, storePackages bool, installPath string, wg *sync.WaitGroup, mu *sync.Mutex, db *sql.DB) {
+func AsyncFullyUpgrade(queryName string, storePackages bool, installDir string, wg *sync.WaitGroup, db *sql.DB) {
+	defer wg.Done()
 	installed, err := utils.CheckIfPackageInstalled(queryName)
 	if err != nil {
 		log.Println(err)
@@ -547,10 +590,11 @@ func AsyncFullyUpgrade(queryName string, storePackages bool, installPath string,
 	}
 	var newSerial int
 	var id string
-	if err := db.QueryRow("SELECT serial, id FROM packages WHERE query_name = ? ORDER BY serial LIMIT 1", queryName).Scan(&newSerial, &id); err != nil {
+	if err := db.QueryRow("SELECT serial, id FROM packages WHERE query_name = ? ORDER BY serial DESC LIMIT 1", queryName).Scan(&newSerial, &id); err != nil {
 		log.Println(err)
 		return
 	}
+	installPath := filepath.Join(installDir, id)
 	if oldSerial == newSerial {
 		log.Println(errors_packets.ErrAlredyUpToDate)
 		return
