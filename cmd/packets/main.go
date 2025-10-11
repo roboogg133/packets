@@ -387,11 +387,12 @@ var removeCmd = &cobra.Command{
 				}
 
 				fmt.Println("Sucessifully removed")
+				continue
 
-				os.Exit(0)
 			}
 			log.Fatalf("%s not installed", pkgName)
 		}
+		os.Exit(0)
 	},
 }
 
