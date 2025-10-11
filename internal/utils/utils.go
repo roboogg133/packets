@@ -377,6 +377,7 @@ func RemoveFromInstalledDB(id string) error {
 func GetPackage(id string) (Package, error) {
 
 	var this Package
+	this.Dependencies = make(map[string]string)
 	var peers []Peer
 
 	db, err := sql.Open("sqlite", consts.IndexDB)
