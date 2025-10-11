@@ -480,6 +480,10 @@ var upgradeCmd = &cobra.Command{
 	Short: "upgrade all installed packages",
 	Run: func(cmd *cobra.Command, args []string) {
 
+		if os.Getuid() != 0 {
+			log.Fatal("you must run this command as root")
+		}
+
 		cfg, err := configs.GetConfigTOML()
 		if err != nil {
 			log.Fatal(err)
@@ -523,6 +527,7 @@ func main() {
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(searchCmd)
+	rootCmd.AddCommand(upgradeCmd)
 	rootCmd.Execute()
 }
 

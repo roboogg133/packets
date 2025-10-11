@@ -446,6 +446,7 @@ func GetPackage(id string) (Package, error) {
 	}
 
 	if len(peers) == 0 {
+		fmt.Printf(":: Pulling from %s\n", packageUrl)
 		this.PackageF, err = GetFileHTTP(packageUrl)
 		if err != nil {
 			return Package{}, err
@@ -453,6 +454,7 @@ func GetPackage(id string) (Package, error) {
 	} else {
 		var totalerrors int = 0
 		for _, peer := range peers {
+			fmt.Printf(":: Pulling from local network (%s)\n", peer.IP)
 			this.PackageF, err = GetFileHTTP(fmt.Sprintf("http://%s:%d/%s", peer.IP, peer.Port, filename))
 			if err == nil {
 				break
