@@ -165,12 +165,10 @@ var installCmd = &cobra.Command{
 		for _, inputName := range args {
 			runtime.GC()
 
-			var exist bool
+			var exist bool = false
 			err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM packages WHERE id = ?)", inputName).Scan(&exist)
 			if err != nil {
-				if err != sql.ErrNoRows {
-					log.Panic(err)
-				}
+				log.Fatal(err)
 			}
 			if exist {
 				installed, err := utils.CheckIfPackageInstalled(inputName)
@@ -265,7 +263,7 @@ var installCmd = &cobra.Command{
 			}
 
 			fmt.Printf("Checking dependencies of (%s)\n", inputName)
-			dependenciesRaw, err := utils.GetDependencies(db, inputName)
+			dependenciesRaw, err := utils.GetDependencies(db, id)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -274,7 +272,6 @@ var installCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
-
 			if len(dependencies) > 0 {
 				var wg sync.WaitGroup
 				var mu sync.Mutex
