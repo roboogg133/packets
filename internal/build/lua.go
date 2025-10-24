@@ -6,9 +6,10 @@ import (
 	"os/exec"
 	"strings"
 
+	utils_lua "packets/internal/utils/lua"
+
 	"github.com/spf13/afero"
 	lua "github.com/yuin/gopher-lua"
-	"packets/configs"
 )
 
 func (container Container) lRemove(L *lua.LState) int {
@@ -195,25 +196,17 @@ func (container Container) lpopen(L *lua.LState) int {
 }
 
 func (container Container) GetLuaState() error {
-	cfg, err := configs.GetConfigTOML()
-	if err != nil {
-		return err
-	}
 	L := lua.NewState()
 	osObject := L.GetGlobal("os").(*lua.LTable)
-	L.SetGlobal("SAFE_MODE", lua.LTrue)
 
-	L.SetGlobal("PACKETS_DATADIR", lua.LString(cfg.Config.Data_d))
-	L.SetGlobal("PACKETS_BINDIR", lua.LString(cfg.Config.Bin_d))
-
-	L.SetGlobal("path_join", L.NewFunction())
+	L.SetGlobal("path_join", L.NewFunction(utils_lua.Ljoin))
 
 	// Packets build functions
 
-	osObject.RawSetString("remove", L.NewFunction(LSafeRemove))
-	osObject.RawSetString("rename", L.NewFunction(LSafeRename))
-	osObject.RawSetString("copy", L.NewFunction(LSafeCopy))
-	osObject.RawSetString("symlink", L.NewFunction(LSymlink))
-	osObject.RawSetString("mkdir", L.NewFunction(LMkdir))
+	osObject.RawSetString("remove", L.NewFunction(container.lRemove))
+	osObject.RawSetString("rename", L.NewFunction(container.lRename))
+	osObject.RawSetString("copy", L.NewFunction(container.lCopy))
+
+	osObject.RawSetString("mkdir", L.NewFunction(container.lMkdir))
 	return nil
 }
