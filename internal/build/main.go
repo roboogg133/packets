@@ -33,11 +33,11 @@ func NewContainer(Root string, dataDir string, manifest configs.Manifest) (Conta
 		return Container{}, err
 	}
 
-	if err := container.FS.MkdirAll("/usr/bin", 0777); err != nil {
+	if err := container.FS.MkdirAll(BinDir, 0777); err != nil {
 		return Container{}, err
 	}
 
-	if err := afero.Symlinker.SymlinkIfPossible(container.FS.(afero.Symlinker), "/usr/bin", "/bin"); err != nil {
+	if err := afero.Symlinker.SymlinkIfPossible(container.FS.(afero.Symlinker), BinDir, SymLinkBinDir); err != nil {
 		return Container{}, err
 	}
 
