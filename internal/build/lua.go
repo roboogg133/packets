@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/afero"
 	lua "github.com/yuin/gopher-lua"
+	"packets/configs"
 )
 
 func (container Container) lRemove(L *lua.LState) int {
@@ -37,6 +38,7 @@ func (container Container) lRename(L *lua.LState) int {
 	L.Push(lua.LTrue)
 	return 1
 }
+
 func (container Container) lCopy(L *lua.LState) int {
 	oldname := L.CheckString(1)
 	newname := L.CheckString(2)
@@ -50,7 +52,6 @@ func (container Container) lCopy(L *lua.LState) int {
 	L.Push(lua.LTrue)
 	L.Push(lua.LNil)
 	return 2
-
 }
 
 func modeFlags(mode string) int {
@@ -76,7 +77,7 @@ func (container Container) lOpen(L *lua.LState) int {
 	path := L.CheckString(1)
 	mode := L.OptString(2, "r")
 
-	file, err := container.FS.OpenFile(path, modeFlags(mode), 0644)
+	file, err := container.FS.OpenFile(path, modeFlags(mode), 0o644)
 	if err != nil {
 		L.Push(lua.LNil)
 		L.Push(lua.LString(err.Error()))
@@ -174,6 +175,12 @@ func (container Container) lpopen(L *lua.LState) int {
 				L.Push(ud)
 				L.Push(lua.LNil)
 			case "w":
+				ud := L.NewUserData()
+				ud.Value = string(output)
+				os.Stdout.Write(output)
+				L.SetMetatable(ud, L.GetTypeMetatable("file"))
+				L.Push(ud)
+				L.Push(lua.LNil)
 			default:
 				L.Push(lua.LNil)
 				L.Push(lua.LString(fmt.Sprintf("%s: Invalid argument", cmdString)))
@@ -188,7 +195,25 @@ func (container Container) lpopen(L *lua.LState) int {
 }
 
 func (container Container) GetLuaState() error {
+	cfg, err := configs.GetConfigTOML()
+	if err != nil {
+		return err
+	}
+	L := lua.NewState()
+	osObject := L.GetGlobal("os").(*lua.LTable)
+	L.SetGlobal("SAFE_MODE", lua.LTrue)
 
-	lua.NewState(lua.Options{})
+	L.SetGlobal("PACKETS_DATADIR", lua.LString(cfg.Config.Data_d))
+	L.SetGlobal("PACKETS_BINDIR", lua.LString(cfg.Config.Bin_d))
+
+	L.SetGlobal("path_join", L.NewFunction())
+
+	// Packets build functions
+
+	osObject.RawSetString("remove", L.NewFunction(LSafeRemove))
+	osObject.RawSetString("rename", L.NewFunction(LSafeRename))
+	osObject.RawSetString("copy", L.NewFunction(LSafeCopy))
+	osObject.RawSetString("symlink", L.NewFunction(LSymlink))
+	osObject.RawSetString("mkdir", L.NewFunction(LMkdir))
 	return nil
 }
