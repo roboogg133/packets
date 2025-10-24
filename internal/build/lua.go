@@ -1,9 +1,12 @@
 package build
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
+	"github.com/spf13/afero"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -103,10 +106,85 @@ func (container Container) lMkdir(L *lua.LState) int {
 	return 2
 }
 
-func (container Container) lexecute(L *lua.LState) {
+func (container Container) lexecute(L *lua.LState) int {
 	cmdString := L.CheckString(1)
 
 	cmdSlice := strings.Fields(cmdString)
+
+	files, err := afero.ReadDir(container.FS, BinDir)
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString("exit"))
+		L.Push(lua.LNumber(127))
+		return 3
+	}
+
+	for _, file := range files {
+		if !file.IsDir() && file.Name() == cmdSlice[0] {
+			err := exec.Command(cmdSlice[0], cmdSlice[1:]...).Run()
+			if err != nil {
+				if errr := err.(*exec.ExitError); errr != nil {
+					L.Push(lua.LFalse)
+
+					if err.(*exec.ExitError).Exited() {
+						L.Push(lua.LString("exit"))
+					} else {
+						L.Push(lua.LString("signal"))
+					}
+
+					L.Push(lua.LNumber(err.(*exec.ExitError).ExitCode()))
+					return 3
+				}
+			}
+			L.Push(lua.LTrue)
+			L.Push(lua.LString("exit"))
+			L.Push(lua.LNumber(0))
+		}
+	}
+
+	L.Push(lua.LFalse)
+	L.Push(lua.LString("exit"))
+	L.Push(lua.LNumber(127))
+	return 3
+}
+
+func (container Container) lpopen(L *lua.LState) int {
+	cmdString := L.CheckString(1)
+	mode := L.CheckString(2)
+
+	cmdSlice := strings.Fields(cmdString)
+
+	files, err := afero.ReadDir(container.FS, BinDir)
+	if err != nil {
+		L.Push(lua.LNil)
+		L.Push(lua.LString("can't find executable"))
+		return 2
+	}
+
+	for _, file := range files {
+		if !file.IsDir() && file.Name() == cmdSlice[0] {
+			cmd := exec.Command(cmdSlice[0], cmdSlice[1:]...)
+			output, _ := cmd.CombinedOutput()
+
+			switch mode {
+			case "r":
+				ud := L.NewUserData()
+				ud.Value = string(output)
+				L.SetMetatable(ud, L.GetTypeMetatable("file"))
+				L.Push(ud)
+				L.Push(lua.LNil)
+			case "w":
+			default:
+				L.Push(lua.LNil)
+				L.Push(lua.LString(fmt.Sprintf("%s: Invalid argument", cmdString)))
+			}
+
+		}
+	}
+
+	L.Push(lua.LNil)
+	L.Push(lua.LString("can't find any executable"))
+	return 2
 }
 
 func (container Container) GetLuaState() error {
