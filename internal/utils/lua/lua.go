@@ -14,7 +14,6 @@ func GetSandBox() (lua.LState, error) {
 	}
 	L := lua.NewState()
 	osObject := L.GetGlobal("os").(*lua.LTable)
-
 	L.SetGlobal("SAFE_MODE", lua.LTrue)
 
 	L.SetGlobal("PACKETS_DATADIR", lua.LString(cfg.Config.Data_d))

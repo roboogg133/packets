@@ -649,7 +649,7 @@ func UpgradeToThis(id string, installPath string, installedDB *sql.DB, storePkgF
         serial = ?, package_d = ?, filename = ?, os = ?, arch = ?, in_cache = ?
    `,
 		p.QueryName,
-		p.Manifest.Info.Id,
+		p.Manifest.Package.Id,
 		p.Version,
 		p.Description,
 		p.Serial,

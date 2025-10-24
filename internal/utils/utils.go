@@ -210,7 +210,7 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 
 	defer func() {
 		if !success {
-			_, err := db.Exec("DELETE FROM packages WHERE id = ?", p.Manifest.Info.Id)
+			_, err := db.Exec("DELETE FROM packages WHERE id = ?", p.Manifest.Package.Id)
 			if err != nil {
 				log.Println("failed to rollback package addition:", err)
 			}
@@ -223,7 +223,7 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
         serial, package_d, filename, os, arch, in_cache
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.QueryName,
-		p.Manifest.Info.Id,
+		p.Manifest.Package.Id,
 		p.Version,
 		p.Description,
 		p.Serial,
@@ -238,7 +238,7 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 	}
 
 	for depnName, versionConstraint := range p.Dependencies {
-		_, err = db.Exec("INSERT INTO package_dependencies (package_id, dependency_name, version_constraint) VALUES (?, ?, ?)", p.Manifest.Info.Id, depnName, versionConstraint)
+		_, err = db.Exec("INSERT INTO package_dependencies (package_id, dependency_name, version_constraint) VALUES (?, ?, ?)", p.Manifest.Package.Id, depnName, versionConstraint)
 	}
 
 	success = true

@@ -1,17 +1,21 @@
 package configs
 
 type Manifest struct {
-	Info struct {
+	Package struct {
 		Name         string            `toml:"name"`
 		Id           string            `toml:"id"`
 		Version      string            `toml:"version"`
 		Description  string            `toml:"description"`
 		Dependencies map[string]string `toml:"dependencies"`
 		Author       string            `toml:"author"`
-	} `toml:"Info"`
+	} `toml:"Package"`
+	Build struct {
+		BuildDependencies map[string]string `toml:"dependencies"`
+	}
 	Hooks struct {
 		Install string `toml:"install"`
 		Remove  string `toml:"remove"`
+		Build   string `toml:"build"`
 	} `toml:"Hooks"`
 }
 
