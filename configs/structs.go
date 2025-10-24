@@ -8,6 +8,9 @@ type Manifest struct {
 		Description  string            `toml:"description"`
 		Dependencies map[string]string `toml:"dependencies"`
 		Author       string            `toml:"author"`
+		Architeture  string            `toml:"architeture"`
+		Os           string            `toml:"os"`
+		PacakgeType  string            `toml:"type"`
 	} `toml:"Package"`
 	Build struct {
 		BuildDependencies map[string]string `toml:"dependencies"`
