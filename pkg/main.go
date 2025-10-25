@@ -3,24 +3,53 @@ package packets
 import (
 	"archive/tar"
 	"bytes"
+	"crypto/ed25519"
+	"database/sql"
+	"fmt"
 	"io"
+	"log"
+	"net/http"
 	"os"
 	"packets/internal/build"
+	"packets/internal/consts"
+	errors_packets "packets/internal/errors"
+	"packets/internal/packet"
 	"packets/internal/utils"
-	"runtime"
+	"path"
 
 	utils_lua "packets/internal/utils/lua"
 	"path/filepath"
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
-	lua "github.com/yuin/gopher-lua"
 	_ "modernc.org/sqlite"
 )
 
+type Package struct {
+	PackageF       []byte
+	Version        string
+	ImageUrl       string
+	QueryName      string
+	Description    string
+	Author         string
+	AuthorVerified bool
+	OS             string
+	Arch           string
+	Filename       string
+	Size           int64
+	Dependencies   map[string]string
+
+	Signature []byte
+	PublicKey ed25519.PublicKey
+
+	Serial int
+
+	Manifest packet.PacketLua
+}
+
 // Install exctract and fully install from a package file ( tar.zst )
 func InstallPackage(file []byte, destDir string) error {
-	manifest, err := utils.ReadManifest(bytes.NewReader(file))
+	manifest, err := packet.ReadPacketFromFile(bytes.NewReader(file))
 	if err != nil {
 		return err
 	}
@@ -97,7 +126,7 @@ func InstallPackage(file []byte, destDir string) error {
 				return err
 			}
 
-			if filepath.Base(hdr.Name) == "manifest.toml" || filepath.Base(hdr.Name) == manifest.Hooks.Install || filepath.Base(hdr.Name) == manifest.Hooks.Remove {
+			if filepath.Base(hdr.Name) == "Packet.lua" {
 				err = os.Chmod(absPath, os.FileMode(0755))
 				if err != nil {
 					return err
@@ -115,61 +144,159 @@ func InstallPackage(file []byte, destDir string) error {
 		return err
 	}
 
-	L.SetGlobal("DATA_DIR", lua.LString(filepath.Join(destDir, "data")))
-	L.SetGlobal("script", lua.LString(manifest.Hooks.Build))
-
-	container, err := build.NewContainer(filepath.Join(destDir, "data"), manifest)
+	bootstrapcontainer, err := build.NewContainer(manifest)
 	if err != nil {
 		return err
 	}
 
-	container.GetLuaState()
+	if err := bootstrapcontainer.ExecutePrepare(manifest, &L); err != nil {
+		return fmt.Errorf("error executing prepare: %s", err)
+	}
 
-	L.SetGlobal("data_dir", lua.LString(filepath.Join(destDir, "data")))
-	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	if err := bootstrapcontainer.ExecuteBuild(manifest, &L); err != nil {
+		return fmt.Errorf("error executing build: %s", err)
+	}
 
 	if err := utils.ChangeToNoPermission(); err != nil {
-		return err
+		return fmt.Errorf("error changing to packet user: %s", err)
 	}
-	if err := L.DoFile(filepath.Join(destDir, manifest.Hooks.Install)); err != nil {
-		return err
+	if err := bootstrapcontainer.ExecuteInstall(manifest, &L); err != nil {
+		return fmt.Errorf("error executing build: %s", err)
 	}
 
 	if err := utils.ElevatePermission(); err != nil {
-		return err
+		return fmt.Errorf("error changing to root: %s", err)
 	}
 
 	return nil
 }
 
-// ExecuteRemoveScript executes the remove script from the package
-func ExecuteRemoveScript(path string) error {
+func GetPackage(id string) (Package, error) {
 
-	L, err := utils_lua.GetSandBox()
+	var this Package
+	this.Dependencies = make(map[string]string)
+	var peers []Peer
+
+	db, err := sql.Open("sqlite", consts.IndexDB)
 	if err != nil {
-		return err
+		return this, err
+	}
+	defer db.Close()
+
+	var packageUrl string
+	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, serial, size FROM packages WHERE id = ?", id).
+		Scan(
+			&this.QueryName,
+			&this.Version,
+			&packageUrl,
+			&this.ImageUrl,
+			&this.Description,
+			&this.Author,
+			&this.AuthorVerified,
+			&this.OS,
+			&this.Arch,
+			&this.Signature,
+			&this.PublicKey,
+			&this.Serial,
+			&this.Size,
+		)
+	if err != nil {
+		return Package{}, err
 	}
 
-	L.SetGlobal("DATA_DIR", lua.LFalse)
-	L.SetGlobal("script", lua.LString(path))
+	rows, err := db.Query("SELECT dependency_name, version_constraint FROM package_dependencies WHERE package_id = ?", id)
+	if err != nil {
+		return Package{}, err
+	}
+	defer rows.Close()
 
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	for rows.Next() {
+		var a, vConstraint string
+		if err := rows.Scan(&a, &vConstraint); err != nil {
+			return Package{}, err
+		}
 
-	if err := utils.ChangeToNoPermission(); err != nil {
-		return err
+		this.Dependencies[a] = vConstraint
 	}
 
-	if err := L.DoFile(path); err != nil {
-		return err
+	filename := path.Base(packageUrl)
+	this.Filename = filename
+
+	dirEntry, err := os.ReadDir(consts.DefaultCache_d)
+	if err != nil {
+		return Package{}, err
 	}
 
-	if err := utils.ElevatePermission(); err != nil {
-		return err
+	for _, v := range dirEntry {
+		if v.Name() == filename {
+			this.PackageF, err = os.ReadFile(filepath.Join(consts.DefaultCache_d, filename))
+			if err != nil {
+				break
+			}
+			goto skipping
+
+		}
 	}
 
-	return nil
+	peers, err = AskLAN(filename)
+	if err != nil {
+		return Package{}, err
+	}
+
+	if len(peers) == 0 {
+		fmt.Printf(":: Pulling from %s\n", packageUrl)
+		this.PackageF, err = getFileHTTP(packageUrl)
+		if err != nil {
+			return Package{}, err
+		}
+	} else {
+		var totalerrors int = 0
+		for _, peer := range peers {
+			fmt.Printf(":: Pulling from local network (%s)\n", peer.IP)
+			this.PackageF, err = getFileHTTP(fmt.Sprintf("http://%s:%d/%s", peer.IP, peer.Port, filename))
+			if err == nil {
+				break
+			} else {
+				totalerrors++
+			}
+		}
+		if totalerrors == len(peers) {
+			this.PackageF, err = getFileHTTP(packageUrl)
+			if err != nil {
+				return Package{}, err
+			}
+		}
+	}
+
+skipping:
+
+	reader := bytes.NewReader(this.PackageF)
+	this.Manifest, err = packet.ReadPacketFromFile(reader)
+	if err != nil {
+		return Package{}, err
+	}
+
+	if !ed25519.Verify(this.PublicKey, this.PackageF, this.Signature) {
+		return Package{}, errors_packets.ErrInvalidSignature
+	}
+
+	return this, nil
+}
+
+func getFileHTTP(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors_packets.ErrResponseNot200OK
+	}
+
+	fileBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return fileBytes, nil
 }

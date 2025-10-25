@@ -32,10 +32,9 @@ func (container Container) createNew() error {
 		return err
 	}
 	var wg sync.WaitGroup
-	var mu sync.Mutex
 	for _, depn := range dependencies {
 		wg.Add(1)
-		go container.asyncFullInstallDependencie(depn, cfg.Config.StorePackages, depn, &wg, &mu)
+		go container.asyncFullInstallDependencie(depn, cfg.Config.StorePackages, depn, &wg)
 	}
 	wg.Wait()
 

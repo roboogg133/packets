@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"packets/internal/packet"
 	"packets/internal/utils"
 	utils_lua "packets/internal/utils/lua"
 	"path/filepath"
@@ -14,11 +15,10 @@ import (
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
-	lua "github.com/yuin/gopher-lua"
 )
 
 func (container Container) installPackage(file []byte, destDir string) error {
-	manifest, err := utils.ReadManifest(bytes.NewReader(file))
+	manifest, err := packet.ReadPacketFromFile(bytes.NewReader(file))
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func (container Container) installPackage(file []byte, destDir string) error {
 				return err
 			}
 
-			if filepath.Base(hdr.Name) == "manifest.toml" || filepath.Base(hdr.Name) == manifest.Hooks.Install || filepath.Base(hdr.Name) == manifest.Hooks.Remove {
+			if filepath.Base(hdr.Name) == "Packet.lua" {
 				err = os.Chmod(absPath, os.FileMode(0755))
 				if err != nil {
 					return err
@@ -113,34 +113,34 @@ func (container Container) installPackage(file []byte, destDir string) error {
 		return err
 	}
 
-	L.SetGlobal("DATA_DIR", lua.LString(filepath.Join(destDir, "data")))
-	L.SetGlobal("script", lua.LString(manifest.Hooks.Build))
-
-	bootstrapcontainer, err := NewContainer(filepath.Join(container.Root, destDir, "data"), manifest)
+	bootstrapcontainer, err := NewContainer(manifest)
 	if err != nil {
 		return err
 	}
 
-	bootstrapcontainer.LuaState.DoFile(manifest.Hooks.Build)
+	if err := bootstrapcontainer.ExecutePrepare(manifest, &L); err != nil {
+		return fmt.Errorf("error executing prepare: %s", err)
+	}
 
-	L.SetGlobal("DATA_DIR", lua.LString(filepath.Join(destDir, "data")))
-	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
+	if err := bootstrapcontainer.ExecuteBuild(manifest, &L); err != nil {
+		return fmt.Errorf("error executing build: %s", err)
+	}
 
 	if err := utils.ChangeToNoPermission(); err != nil {
-		return err
+		return fmt.Errorf("error changing to packet user: %s", err)
 	}
-	if err := L.DoFile(filepath.Join(destDir, manifest.Hooks.Install)); err != nil {
-		return err
+	if err := bootstrapcontainer.ExecuteInstall(manifest, &L); err != nil {
+		return fmt.Errorf("error executing build: %s", err)
 	}
 
 	if err := utils.ElevatePermission(); err != nil {
-		return err
+		return fmt.Errorf("error changing to root: %s", err)
 	}
 
 	return nil
 }
 
-func (container Container) asyncFullInstallDependencie(dep string, storePackages bool, installPath string, wg *sync.WaitGroup, mu *sync.Mutex) {
+func (container Container) asyncFullInstallDependencie(dep string, storePackages bool, installPath string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	fmt.Printf(" downloading %s \n", dep)
