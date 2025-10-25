@@ -2,9 +2,9 @@ package build
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	utils_lua "packets/internal/utils/lua"
@@ -196,53 +196,11 @@ func (container Container) lpopen(L *lua.LState) int {
 	return 2
 }
 
-func (container Container) lGet(L *lua.LState) int {
-	src := L.CheckString(1)
-	dest := L.CheckString(2)
+func (container Container) lDir(L *lua.LState) int {
+	dir := L.CheckString(1)
 
-	file, err := container.FS.Open(src)
-	if err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString(err.Error()))
-		return 2
-	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString(err.Error()))
-		return 2
-	}
-
-	fileBlob, err := io.ReadAll(file)
-	if err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString(err.Error()))
-		return 2
-	}
-
-	if err := os.WriteFile(dest, fileBlob, info.Mode()); err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString(err.Error()))
-		return 2
-	}
-
-	L.Push(lua.LTrue)
-	L.Push(lua.LNil)
-	return 2
-}
-
-func (container Container) lCopyToContainer(L *lua.LState) int {
-
-	if err := container.CopyHostToContainer(L.CheckString(1), L.CheckString(2)); err != nil {
-		L.Push(lua.LFalse)
-		L.Push(lua.LString(err.Error()))
-		return 2
-	}
-	L.Push(lua.LTrue)
-	L.Push(lua.LNil)
-	return 2
+	L.Push(lua.LString(filepath.Join(container.Root, filepath.Clean(dir))))
+	return 1
 }
 
 func (container Container) GetLuaState() {

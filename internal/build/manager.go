@@ -22,7 +22,7 @@ func (container Container) createNew() error {
 	if err := os.Chown(filepath.Join(consts.BuildImagesDir, string(container.BuildID)), packetsuid, 0); err != nil {
 		return err
 	}
-	dependencies, err := utils.ResolvDependencies(container.Manifest.Build.BuildDependencies)
+	dependencies, err := utils.ResolvDependencies(container.Manifest.BuildDependencies)
 	if err != nil {
 		return err
 	}
@@ -38,6 +38,8 @@ func (container Container) createNew() error {
 		go container.asyncFullInstallDependencie(depn, cfg.Config.StorePackages, depn, &wg, &mu)
 	}
 	wg.Wait()
+
+	container.Root = filepath.Join(consts.BuildImagesDir, string(container.BuildID))
 
 	container.saveBuild()
 	return nil

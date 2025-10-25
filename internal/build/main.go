@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"packets/configs"
 	"packets/internal/consts"
+	"packets/internal/packet"
 	"path/filepath"
 
 	_ "modernc.org/sqlite"
@@ -20,18 +20,17 @@ type Container struct {
 	BuildID     BuildID
 	Root        string
 	FS          afero.Fs
-	DataDir     string
 	LuaState    lua.LState
-	Manifest    configs.Manifest
+	Manifest    packet.PacketLua
 	uses        int
 	DeleteAfter bool
 }
 
-func NewContainer(dataDir string, manifest configs.Manifest) (Container, error) {
+func NewContainer(manifest packet.PacketLua) (Container, error) {
 
 	var container Container
 	var err error
-	container.BuildID, err = getBuildId(manifest.Build.BuildDependencies)
+	container.BuildID, err = getBuildId(manifest.BuildDependencies)
 	if err != nil {
 		return Container{}, err
 	}
@@ -66,12 +65,7 @@ func NewContainer(dataDir string, manifest configs.Manifest) (Container, error) 
 	fileSystem := afero.NewBasePathFs(baseFs, container.Root)
 
 	container.Manifest = manifest
-	container.DataDir = dataDir
 	container.FS = fileSystem
-
-	if err := container.CopyHostToContainer(dataDir, "/data"); err != nil {
-		return Container{}, err
-	}
 
 	if err := container.FS.MkdirAll(BinDir, 0777); err != nil {
 		return Container{}, err

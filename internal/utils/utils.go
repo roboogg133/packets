@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"archive/tar"
-	"bytes"
 	"crypto/ed25519"
 	"database/sql"
 	"fmt"
@@ -17,12 +15,9 @@ import (
 	"strings"
 	"syscall"
 
-	"packets/configs"
 	"packets/internal/consts"
 	errors_packets "packets/internal/errors"
-
-	"github.com/klauspost/compress/zstd"
-	"github.com/pelletier/go-toml/v2"
+	"packets/internal/packet"
 )
 
 type Package struct {
@@ -39,10 +34,10 @@ type Package struct {
 	Size           int64
 	Dependencies   map[string]string
 
+	Manifest packet.PacketLua
+
 	Signature []byte
 	PublicKey ed25519.PublicKey
-
-	Manifest configs.Manifest
 
 	Serial int
 }
@@ -63,40 +58,6 @@ func GetFileHTTP(url string) ([]byte, error) {
 	}
 
 	return fileBytes, nil
-}
-
-// ReadManifest is crucial to get package metadata it reads manifest.toml from a package file (tar.zst)
-func ReadManifest(file io.Reader) (configs.Manifest, error) {
-	zstdReader, err := zstd.NewReader(file)
-	if err != nil {
-		return configs.Manifest{}, err
-	}
-	defer zstdReader.Close()
-
-	tarReader := tar.NewReader(zstdReader)
-	for {
-		header, err := tarReader.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return configs.Manifest{}, err
-		}
-
-		if filepath.Base(header.Name) == "manifest.toml" {
-			decoder := toml.NewDecoder(tarReader)
-
-			var manifest configs.Manifest
-
-			if err := decoder.Decode(&manifest); err != nil {
-				return configs.Manifest{}, nil
-			}
-
-			return manifest, nil
-		}
-
-	}
-	return configs.Manifest{}, errors_packets.ErrCantFindManifestTOML
 }
 
 // CopyDir copies a directory from source to destination
@@ -190,6 +151,7 @@ func CopyFile(source string, destination string) error {
 }
 
 // Write writes the package file to the cache directory and returns the path to it
+
 func (p *Package) Write() (string, error) {
 	if err := os.WriteFile(filepath.Join(consts.DefaultCache_d, p.Filename), p.PackageF, 0o644); err != nil {
 		_ = os.Remove(filepath.Join(consts.DefaultCache_d, p.Filename))
@@ -210,7 +172,7 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 
 	defer func() {
 		if !success {
-			_, err := db.Exec("DELETE FROM packages WHERE id = ?", p.Manifest.Package.Id)
+			_, err := db.Exec("DELETE FROM packages WHERE id = ?", p.Manifest.Id)
 			if err != nil {
 				log.Println("failed to rollback package addition:", err)
 			}
@@ -218,12 +180,12 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 	}()
 
 	_, err = db.Exec(`
-    INSERT INTO packages (
-        query_name, id, version, description,
-        serial, package_d, filename, os, arch, in_cache
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	    INSERT INTO packages (
+	        query_name, id, version, description,
+	        serial, package_d, filename, os, arch, in_cache
+	    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.QueryName,
-		p.Manifest.Package.Id,
+		p.Manifest.Id,
 		p.Version,
 		p.Description,
 		p.Serial,
@@ -238,7 +200,7 @@ func (p *Package) AddToInstalledDB(inCache int, packagePath string) error {
 	}
 
 	for depnName, versionConstraint := range p.Dependencies {
-		_, err = db.Exec("INSERT INTO package_dependencies (package_id, dependency_name, version_constraint) VALUES (?, ?, ?)", p.Manifest.Package.Id, depnName, versionConstraint)
+		_, err = db.Exec("INSERT INTO package_dependencies (package_id, dependency_name, version_constraint) VALUES (?, ?, ?)", p.Manifest.Id, depnName, versionConstraint)
 	}
 
 	success = true
@@ -341,18 +303,6 @@ func ResolvDependencies(depnList map[string]string) ([]string, error) {
 	}
 
 	return resolved, nil
-}
-
-func ManifestFileRead(file io.Reader) (configs.Manifest, error) {
-	decoder := toml.NewDecoder(file)
-
-	var manifest configs.Manifest
-
-	if err := decoder.Decode(&manifest); err != nil {
-		return configs.Manifest{}, nil
-	}
-
-	return manifest, nil
 }
 
 func RemoveFromInstalledDB(id string) error {
@@ -468,8 +418,7 @@ func GetPackage(id string) (Package, error) {
 
 skipping:
 
-	reader := bytes.NewReader(this.PackageF)
-	this.Manifest, err = ReadManifest(reader)
+	this.Manifest, err = packet.ReadPacket(this.PackageF)
 	if err != nil {
 		return Package{}, err
 	}
@@ -510,3 +459,21 @@ func ChangeToNoPermission() error {
 }
 
 func ElevatePermission() error { return syscall.Setresuid(0, 0, 0) }
+
+func getFileHTTP(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors_packets.ErrResponseNot200OK
+	}
+
+	fileBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return fileBytes, nil
+}
