@@ -2,6 +2,7 @@ package build
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -195,18 +196,71 @@ func (container Container) lpopen(L *lua.LState) int {
 	return 2
 }
 
-func (container Container) GetLuaState() error {
+func (container Container) lGet(L *lua.LState) int {
+	src := L.CheckString(1)
+	dest := L.CheckString(2)
+
+	file, err := container.FS.Open(src)
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	fileBlob, err := io.ReadAll(file)
+	if err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	if err := os.WriteFile(dest, fileBlob, info.Mode()); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	L.Push(lua.LTrue)
+	L.Push(lua.LNil)
+	return 2
+}
+
+func (container Container) lCopyToContainer(L *lua.LState) int {
+
+	if err := container.CopyHostToContainer(L.CheckString(1), L.CheckString(2)); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+	L.Push(lua.LTrue)
+	L.Push(lua.LNil)
+	return 2
+}
+
+func (container Container) GetLuaState() {
+
 	L := lua.NewState()
 	osObject := L.GetGlobal("os").(*lua.LTable)
+	ioObject := L.GetGlobal("io").(*lua.LTable)
 
 	L.SetGlobal("path_join", L.NewFunction(utils_lua.Ljoin))
-
-	// Packets build functions
 
 	osObject.RawSetString("remove", L.NewFunction(container.lRemove))
 	osObject.RawSetString("rename", L.NewFunction(container.lRename))
 	osObject.RawSetString("copy", L.NewFunction(container.lCopy))
 
 	osObject.RawSetString("mkdir", L.NewFunction(container.lMkdir))
-	return nil
+
+	ioObject.RawSetString("popen", L.NewFunction(container.lpopen))
+	ioObject.RawSetString("open", L.NewFunction(container.lOpen))
+
+	container.LuaState = *L
 }

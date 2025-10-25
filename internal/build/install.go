@@ -1,25 +1,23 @@
-package packets
+package build
 
 import (
 	"archive/tar"
 	"bytes"
+	"fmt"
 	"io"
+	"log"
 	"os"
-	"packets/internal/build"
 	"packets/internal/utils"
-	"runtime"
-
 	utils_lua "packets/internal/utils/lua"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 	lua "github.com/yuin/gopher-lua"
-	_ "modernc.org/sqlite"
 )
 
-// Install exctract and fully install from a package file ( tar.zst )
-func InstallPackage(file []byte, destDir string) error {
+func (container Container) installPackage(file []byte, destDir string) error {
 	manifest, err := utils.ReadManifest(bytes.NewReader(file))
 	if err != nil {
 		return err
@@ -53,15 +51,15 @@ func InstallPackage(file []byte, destDir string) error {
 			continue
 		}
 
-		if err := os.MkdirAll(destDir, 0775); err != nil {
+		if err := os.MkdirAll(filepath.Join(container.Root, destDir), 0775); err != nil {
 			return err
 		}
 
-		if err := os.Chown(destDir, uid, 0); err != nil {
+		if err := os.Chown(filepath.Join(container.Root, destDir), uid, 0); err != nil {
 			return err
 		}
 
-		absPath := filepath.Join(destDir, rel)
+		absPath := filepath.Join(filepath.Join(container.Root, destDir), rel)
 
 		switch hdr.Typeflag {
 
@@ -118,18 +116,15 @@ func InstallPackage(file []byte, destDir string) error {
 	L.SetGlobal("DATA_DIR", lua.LString(filepath.Join(destDir, "data")))
 	L.SetGlobal("script", lua.LString(manifest.Hooks.Build))
 
-	container, err := build.NewContainer(filepath.Join(destDir, "data"), manifest)
+	bootstrapcontainer, err := NewContainer(filepath.Join(container.Root, destDir, "data"), manifest)
 	if err != nil {
 		return err
 	}
 
-	container.GetLuaState()
+	bootstrapcontainer.LuaState.DoFile(manifest.Hooks.Build)
 
-	L.SetGlobal("data_dir", lua.LString(filepath.Join(destDir, "data")))
+	L.SetGlobal("DATA_DIR", lua.LString(filepath.Join(destDir, "data")))
 	L.SetGlobal("script", lua.LString(manifest.Hooks.Install))
-
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 
 	if err := utils.ChangeToNoPermission(); err != nil {
 		return err
@@ -145,31 +140,26 @@ func InstallPackage(file []byte, destDir string) error {
 	return nil
 }
 
-// ExecuteRemoveScript executes the remove script from the package
-func ExecuteRemoveScript(path string) error {
+func (container Container) asyncFullInstallDependencie(dep string, storePackages bool, installPath string, wg *sync.WaitGroup, mu *sync.Mutex) {
+	defer wg.Done()
 
-	L, err := utils_lua.GetSandBox()
+	fmt.Printf(" downloading %s \n", dep)
+	p, err := utils.GetPackage(dep)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 
-	L.SetGlobal("DATA_DIR", lua.LFalse)
-	L.SetGlobal("script", lua.LString(path))
+	fmt.Printf(" installing %s \n", dep)
 
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	if err := utils.ChangeToNoPermission(); err != nil {
-		return err
+	if err := container.installPackage(p.PackageF, installPath); err != nil {
+		log.Fatal(err)
 	}
 
-	if err := L.DoFile(path); err != nil {
-		return err
+	if storePackages {
+		_, err := p.Write()
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
 	}
-
-	if err := utils.ElevatePermission(); err != nil {
-		return err
-	}
-
-	return nil
 }

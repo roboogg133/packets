@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	_ "embed"
 	"fmt"
 	"log"
 	"os"
@@ -258,7 +257,6 @@ var installCmd = &cobra.Command{
 				var wg sync.WaitGroup
 				wg.Add(1)
 				go AsyncFullyUpgrade(inputName, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, id), &wg, db)
-				wg.Done()
 				continue
 			}
 

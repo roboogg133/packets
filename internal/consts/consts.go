@@ -11,6 +11,7 @@ const (
 	LANDeadline     = 2 * time.Second
 	IndexDB         = "/etc/packets/index.db"
 	InstalledDB     = "/etc/packets/installed.db"
+	BuildImagesDir  = "/etc/packets/temp"
 	DefaultSyncUrl  = "https://servidordomal.fun/index.db"
 )
 

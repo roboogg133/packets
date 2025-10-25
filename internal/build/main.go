@@ -1,30 +1,70 @@
 package build
 
 import (
+	"database/sql"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"os"
 	"packets/configs"
-	utils_lua "packets/internal/utils/lua"
+	"packets/internal/consts"
 	"path/filepath"
+
+	_ "modernc.org/sqlite"
 
 	"github.com/spf13/afero"
 	lua "github.com/yuin/gopher-lua"
 )
 
 type Container struct {
-	Root     string
-	FS       afero.Fs
-	DataDir  string
-	Manifest configs.Manifest
+	BuildID     BuildID
+	Root        string
+	FS          afero.Fs
+	DataDir     string
+	LuaState    lua.LState
+	Manifest    configs.Manifest
+	uses        int
+	DeleteAfter bool
 }
 
-func NewContainer(Root string, dataDir string, manifest configs.Manifest) (Container, error) {
+func NewContainer(dataDir string, manifest configs.Manifest) (Container, error) {
 
 	var container Container
+	var err error
+	container.BuildID, err = getBuildId(manifest.Build.BuildDependencies)
+	if err != nil {
+		return Container{}, err
+	}
 	baseFs := afero.NewOsFs()
-	fileSystem := afero.NewBasePathFs(baseFs, Root)
 
-	container.Root = Root
+	db, err := sql.Open("sqlite", consts.InstalledDB)
+	if err != nil {
+		return Container{}, err
+	}
+	if err := db.QueryRow("SELECT uses, dir FROM build_dependencies WHERE id = ? ", container.BuildID).Scan(&container.uses, container.Root); err != nil {
+		db.Close()
+		return Container{}, err
+	}
+	db.Close()
+
+	if container.Root != "/dev/null" {
+		if _, err := os.Stat(container.Root); err != nil {
+			if os.IsNotExist(err) {
+				if err := container.createNew(); err != nil {
+					return Container{}, err
+				}
+			}
+		}
+	} else {
+		container.DeleteAfter = true
+		if err := container.createNew(); err != nil {
+			return Container{}, err
+		}
+	}
+
+	container.GetLuaState()
+	fileSystem := afero.NewBasePathFs(baseFs, container.Root)
+
 	container.Manifest = manifest
 	container.DataDir = dataDir
 	container.FS = fileSystem
@@ -34,6 +74,10 @@ func NewContainer(Root string, dataDir string, manifest configs.Manifest) (Conta
 	}
 
 	if err := container.FS.MkdirAll(BinDir, 0777); err != nil {
+		return Container{}, err
+	}
+
+	if err := container.FS.MkdirAll("/etc/packets", 0777); err != nil {
 		return Container{}, err
 	}
 
@@ -115,15 +159,31 @@ func (container Container) copySingleFile(source string, destination string) err
 	return nil
 }
 
-func (container Container) RunBuild() error {
+func getBuildId(buildDependencies map[string]string) (BuildID, error) {
+	blobs, err := json.Marshal(buildDependencies)
+	if err != nil {
+		return "", err
+	}
+	return BuildID(base64.StdEncoding.EncodeToString(blobs)), nil
+}
 
-	L, err := utils_lua.GetSandBox()
+func (container Container) saveBuild() error {
+	db, err := sql.Open("sqlite", consts.InstalledDB)
 	if err != nil {
 		return err
 	}
+	defer db.Close()
 
-	L.SetGlobal("data_dir", lua.LString(container.DataDir))
-	L.SetGlobal("script", lua.LString(container.Manifest.Hooks.Build))
+	buildID := container.BuildID
+	var exists bool
+	if err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM build_dependencies WHERE id = ?)", buildID).Scan(exists); err != nil {
+		return err
+	}
+	if exists {
+		_, err := db.Exec("UPDATE FROM build_dependencies WHERE id = ? SET uses = uses + 1", buildID)
+		return err
+	}
 
-	return nil
+	_, err = db.Exec("INSERT INTO build_dependencies (id) VALUES (?)", buildID)
+	return err
 }
