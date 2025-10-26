@@ -10,7 +10,6 @@ import (
 	"runtime"
 
 	"github.com/klauspost/compress/zstd"
-	"github.com/pelletier/go-toml/v2"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -126,15 +125,13 @@ func ReadPacketFromFile(file io.Reader) (PacketLua, error) {
 		}
 
 		if filepath.Base(header.Name) == "Packet.lua" {
-			decoder := toml.NewDecoder(tarReader)
 
-			var packetLua PacketLua
-
-			if err := decoder.Decode(&packetLua); err != nil {
+			packageLuaBlob, err := io.ReadAll(tarReader)
+			if err != nil {
 				return PacketLua{}, err
 			}
 
-			return packetLua, nil
+			return ReadPacket(packageLuaBlob)
 		}
 
 	}
