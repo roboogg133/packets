@@ -149,6 +149,8 @@ func InstallPackage(file []byte, destDir string) error {
 		return err
 	}
 
+	os.Chdir(destDir)
+
 	if err := bootstrapcontainer.ExecutePrepare(manifest, &L); err != nil {
 		return fmt.Errorf("error executing prepare: %s", err)
 	}
