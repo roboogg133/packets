@@ -9,6 +9,10 @@ import (
 
 func (container Container) ExecutePrepare(packetLua packet.PacketLua, L *lua.LState) error {
 
+	if packetLua.Prepare == nil {
+		return nil
+	}
+
 	gitTable := L.NewTable()
 
 	gitTable.RawSetString("clone", L.NewFunction(utils_lua.LGitClone))
@@ -28,6 +32,10 @@ func (container Container) ExecutePrepare(packetLua packet.PacketLua, L *lua.LSt
 }
 
 func (container Container) ExecuteBuild(packetLua packet.PacketLua, L *lua.LState) error {
+
+	if packetLua.Build == nil {
+		return nil
+	}
 
 	osObject := L.GetGlobal("os").(*lua.LTable)
 	ioObject := L.GetGlobal("io").(*lua.LTable)
