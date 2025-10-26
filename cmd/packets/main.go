@@ -379,6 +379,8 @@ var removeCmd = &cobra.Command{
 				}
 				fmt.Println(":: Removing", pkgName)
 
+				os.Chdir(packageDir)
+
 				if err := manifest.ExecuteRemove(lua.NewState()); err != nil {
 					log.Panic(err)
 				}
