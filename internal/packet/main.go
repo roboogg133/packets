@@ -10,6 +10,7 @@ import (
 	"runtime"
 
 	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/storage/memory"
 	"github.com/klauspost/compress/zstd"
 	lua "github.com/yuin/gopher-lua"
@@ -46,21 +47,22 @@ func ReadPacket(f []byte) (PacketLua, error) {
 	L := lua.NewState()
 	defer L.Close()
 
-	osObject := L.GetGlobal("os").(*lua.LTable)
-	ioObject := L.GetGlobal("io").(*lua.LTable)
+	//osObject := L.GetGlobal("os").(*lua.LTable)
+	//ioObject := L.GetGlobal("io").(*lua.LTable)
 
-	L.SetGlobal("os", lua.LNil)
-	L.SetGlobal("io", lua.LNil)
-
-	if err := L.DoString(string(f)); err != nil {
-		return PacketLua{}, err
-	}
-	L.SetGlobal("os", osObject)
-	L.SetGlobal("io", ioObject)
+	//	L.SetGlobal("os", lua.LNil)
+	//	L.SetGlobal("io", lua.LNil)
 
 	L.SetGlobal("BIN_DIR", lua.LString(cfg.Config.Bin_d))
 	L.SetGlobal("ARCH", lua.LString(runtime.GOARCH))
 	L.SetGlobal("OS", lua.LString(runtime.GOOS))
+
+	if err := L.DoString(string(f)); err != nil {
+		return PacketLua{}, err
+	}
+	fmt.Println(string(f))
+	//L.SetGlobal("os", osObject)
+	//L.SetGlobal("io", ioObject)
 
 	tableLua := L.Get(-1)
 
@@ -90,10 +92,13 @@ func ReadPacket(f []byte) (PacketLua, error) {
 		GitUrl:    getStringFromTable(pkgTable, "git_url"),
 		GitBranch: getStringFromTable(pkgTable, "git_branch"),
 
-		Prepare: getFunctionFromTable(pkgTable, "prepare"),
-		Build:   getFunctionFromTable(pkgTable, "build"),
-		Install: getFunctionFromTable(pkgTable, "install"),
-		Remove:  getFunctionFromTable(pkgTable, "remove"),
+		Os:           getStringArrayFromTable(L, pkgTable, "os"),
+		Architetures: getStringArrayFromTable(L, pkgTable, "arch"),
+
+		Prepare: getFunctionFromTable(table, "prepare"),
+		Build:   getFunctionFromTable(table, "build"),
+		Install: getFunctionFromTable(table, "install"),
+		Remove:  getFunctionFromTable(table, "remove"),
 	}
 
 	if packetLua.Install == nil || packetLua.Remove == nil {
@@ -143,10 +148,10 @@ func ReadPacketFromFile(file io.Reader) (PacketLua, error) {
 func GetPackageDotLuaFromRemote(url string, branch string) (PacketLua, error) {
 
 	repo, err := git.Clone(memory.NewStorage(), nil, &git.CloneOptions{
-		Depth:        1,
-		URL:          url,
-		SingleBranch: true,
-		RemoteName:   "main",
+		Depth:         1,
+		URL:           url,
+		SingleBranch:  true,
+		ReferenceName: plumbing.ReferenceName("refs/heads/" + branch),
 	})
 	if err != nil {
 		return PacketLua{}, err
@@ -169,8 +174,6 @@ func GetPackageDotLuaFromRemote(url string, branch string) (PacketLua, error) {
 	if err != nil {
 		return PacketLua{}, err
 	}
-
-	fmt.Println(content)
 
 	return ReadPacket([]byte(content))
 }
