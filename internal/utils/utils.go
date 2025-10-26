@@ -431,7 +431,7 @@ skipping:
 }
 
 func GetPacketsUID() (int, error) {
-	_ = exec.Command("useradd", "-M", "-N", "-r", "-s", "/bin/false", "-d", "/var/lib/packets", "packets").Run()
+	_ = exec.Command("useradd", "-M", "-N", "-r", "-s", "/bin/false", "-d", "/etc/packets", "packets").Run()
 	cmd := exec.Command("id", "-u", "packets")
 
 	out, err := cmd.CombinedOutput()
