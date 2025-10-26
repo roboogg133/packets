@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/storage/memory"
 	"github.com/klauspost/compress/zstd"
 	lua "github.com/yuin/gopher-lua"
 )
@@ -136,4 +138,39 @@ func ReadPacketFromFile(file io.Reader) (PacketLua, error) {
 
 	}
 	return PacketLua{}, errors_packets.ErrCantFindPacketDotLua
+}
+
+func GetPackageDotLuaFromRemote(url string, branch string) (PacketLua, error) {
+
+	repo, err := git.Clone(memory.NewStorage(), nil, &git.CloneOptions{
+		Depth:        1,
+		URL:          url,
+		SingleBranch: true,
+		RemoteName:   "main",
+	})
+	if err != nil {
+		return PacketLua{}, err
+	}
+	ref, err := repo.Head()
+	if err != nil {
+		return PacketLua{}, err
+	}
+	commit, err := repo.CommitObject(ref.Hash())
+	if err != nil {
+		return PacketLua{}, err
+	}
+
+	f, err := commit.File("Packet.lua")
+	if err != nil {
+		return PacketLua{}, err
+	}
+
+	content, err := f.Contents()
+	if err != nil {
+		return PacketLua{}, err
+	}
+
+	fmt.Println(content)
+
+	return ReadPacket([]byte(content))
 }
