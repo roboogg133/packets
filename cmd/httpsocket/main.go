@@ -18,7 +18,7 @@ type ConfigTOML struct {
 }
 
 func main() {
-
+	log.Println("Program started")
 	cfg, err := configs.GetConfigTOML()
 	if err != nil {
 		log.Fatal(err)
@@ -31,6 +31,6 @@ func main() {
 
 	fs := http.FileServer(http.Dir(cfg.Config.Cache_d))
 	http.Handle("/", fs)
-
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", cfg.Config.HttpPort), nil))
+	log.Printf("Listening and serving on port %d\n", cfg.Config.HttpPort)
 }
