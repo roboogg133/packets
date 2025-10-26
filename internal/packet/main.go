@@ -47,11 +47,11 @@ func ReadPacket(f []byte) (PacketLua, error) {
 	L := lua.NewState()
 	defer L.Close()
 
-	//osObject := L.GetGlobal("os").(*lua.LTable)
-	//ioObject := L.GetGlobal("io").(*lua.LTable)
+	osObject := L.GetGlobal("os").(*lua.LTable)
+	ioObject := L.GetGlobal("io").(*lua.LTable)
 
-	//	L.SetGlobal("os", lua.LNil)
-	//	L.SetGlobal("io", lua.LNil)
+	L.SetGlobal("os", lua.LNil)
+	L.SetGlobal("io", lua.LNil)
 
 	L.SetGlobal("BIN_DIR", lua.LString(cfg.Config.Bin_d))
 	L.SetGlobal("ARCH", lua.LString(runtime.GOARCH))
@@ -60,9 +60,9 @@ func ReadPacket(f []byte) (PacketLua, error) {
 	if err := L.DoString(string(f)); err != nil {
 		return PacketLua{}, err
 	}
-	fmt.Println(string(f))
-	//L.SetGlobal("os", osObject)
-	//L.SetGlobal("io", ioObject)
+
+	L.SetGlobal("os", osObject)
+	L.SetGlobal("io", ioObject)
 
 	tableLua := L.Get(-1)
 
