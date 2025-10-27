@@ -1,13 +1,14 @@
 return {
     package = {
         name = "packets",
-        id   = "packets@git",
-        version = "git",
+        id   = "packets@1.0.0",
+        version = "1.0.0",
         author  = "robogg133",
         description = "fast, opensource, easy to use package manager.",
         type = "remote",
+        serial = 0,
 
-        build_dependencies = {["go"] = "1.25.1"},
+        build_dependencies = {["go"] = ">=1.25.1"},
 
         git_url = "https://github.com/roboogg133/packets.git",
         git_branch = "main"
