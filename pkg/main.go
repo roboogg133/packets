@@ -49,6 +49,43 @@ type Package struct {
 
 // Install exctract and fully install from a package file ( tar.zst )
 func InstallPackage(file []byte, destDir string) error {
+
+	packetLua, err := packet.ReadPacket(file)
+	if err == nil {
+		L, err := utils_lua.GetSandBox()
+		if err != nil {
+			return err
+		}
+
+		bootstrapcontainer, err := build.NewContainer(packetLua)
+		if err != nil {
+			return err
+		}
+
+		os.Chdir(destDir)
+
+		if err := utils.ChangeToNoPermission(); err != nil {
+			return fmt.Errorf("error changing to packet user: %s", err)
+		}
+
+		if err := bootstrapcontainer.ExecutePrepare(packetLua, &L); err != nil {
+			return fmt.Errorf("error executing prepare: %s", err)
+		}
+
+		if err := bootstrapcontainer.ExecuteBuild(packetLua, &L); err != nil {
+			return fmt.Errorf("error executing build: %s", err)
+		}
+
+		if err := utils.ElevatePermission(); err != nil {
+			return fmt.Errorf("error changing to root: %s", err)
+		}
+
+		if err := bootstrapcontainer.ExecuteInstall(packetLua, &L); err != nil {
+			return fmt.Errorf("error executing build: %s", err)
+		}
+		return nil
+	}
+
 	manifest, err := packet.ReadPacketFromFile(bytes.NewReader(file))
 	if err != nil {
 		return err
@@ -151,6 +188,10 @@ func InstallPackage(file []byte, destDir string) error {
 
 	os.Chdir(destDir)
 
+	if err := utils.ChangeToNoPermission(); err != nil {
+		return fmt.Errorf("error changing to packet user: %s", err)
+	}
+
 	if err := bootstrapcontainer.ExecutePrepare(manifest, &L); err != nil {
 		return fmt.Errorf("error executing prepare: %s", err)
 	}
@@ -159,15 +200,12 @@ func InstallPackage(file []byte, destDir string) error {
 		return fmt.Errorf("error executing build: %s", err)
 	}
 
-	if err := utils.ChangeToNoPermission(); err != nil {
-		return fmt.Errorf("error changing to packet user: %s", err)
-	}
-	if err := bootstrapcontainer.ExecuteInstall(manifest, &L); err != nil {
-		return fmt.Errorf("error executing build: %s", err)
-	}
-
 	if err := utils.ElevatePermission(); err != nil {
 		return fmt.Errorf("error changing to root: %s", err)
+	}
+
+	if err := bootstrapcontainer.ExecuteInstall(manifest, &L); err != nil {
+		return fmt.Errorf("error executing build: %s", err)
 	}
 
 	return nil
@@ -185,8 +223,8 @@ func GetPackage(id string) (Package, error) {
 	}
 	defer db.Close()
 
-	var packageUrl string
-	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, serial, size FROM packages WHERE id = ?", id).
+	var packageUrl, typePackage string
+	err = db.QueryRow("SELECT query_name, version, package_url, image_url, description, author, author_verified, os, arch, signature, public_key, serial, size, type FROM packages WHERE id = ?", id).
 		Scan(
 			&this.QueryName,
 			&this.Version,
@@ -201,6 +239,7 @@ func GetPackage(id string) (Package, error) {
 			&this.PublicKey,
 			&this.Serial,
 			&this.Size,
+			&typePackage,
 		)
 	if err != nil {
 		return Package{}, err
@@ -221,53 +260,64 @@ func GetPackage(id string) (Package, error) {
 		this.Dependencies[a] = vConstraint
 	}
 
-	filename := path.Base(packageUrl)
-	this.Filename = filename
+	if strings.Contains(typePackage, "     ") {
 
-	dirEntry, err := os.ReadDir(consts.DefaultCache_d)
-	if err != nil {
-		return Package{}, err
-	}
+		filename := path.Base(packageUrl)
+		this.Filename = filename
 
-	for _, v := range dirEntry {
-		if v.Name() == filename {
-			this.PackageF, err = os.ReadFile(filepath.Join(consts.DefaultCache_d, filename))
-			if err != nil {
-				break
-			}
-			goto skipping
-
-		}
-	}
-
-	peers, err = AskLAN(filename)
-	if err != nil {
-		return Package{}, err
-	}
-
-	if len(peers) == 0 {
-		fmt.Printf(":: Pulling from %s\n", packageUrl)
-		this.PackageF, err = getFileHTTP(packageUrl)
+		dirEntry, err := os.ReadDir(consts.DefaultCache_d)
 		if err != nil {
 			return Package{}, err
 		}
-	} else {
-		var totalerrors int = 0
-		for _, peer := range peers {
-			fmt.Printf(":: Pulling from local network (%s)\n", peer.IP)
-			this.PackageF, err = getFileHTTP(fmt.Sprintf("http://%s:%d/%s", peer.IP, peer.Port, filename))
-			if err == nil {
-				break
-			} else {
-				totalerrors++
+
+		for _, v := range dirEntry {
+			if v.Name() == filename {
+				this.PackageF, err = os.ReadFile(filepath.Join(consts.DefaultCache_d, filename))
+				if err != nil {
+					break
+				}
+				goto skipping
+
 			}
 		}
-		if totalerrors == len(peers) {
+
+		peers, err = AskLAN(filename)
+		if err != nil {
+			return Package{}, err
+		}
+
+		if len(peers) == 0 {
+			fmt.Printf(":: Pulling from %s\n", packageUrl)
 			this.PackageF, err = getFileHTTP(packageUrl)
 			if err != nil {
 				return Package{}, err
 			}
+		} else {
+			var totalerrors int = 0
+			for _, peer := range peers {
+				fmt.Printf(":: Pulling from local network (%s)\n", peer.IP)
+				this.PackageF, err = getFileHTTP(fmt.Sprintf("http://%s:%d/%s", peer.IP, peer.Port, filename))
+				if err == nil {
+					break
+				} else {
+					totalerrors++
+				}
+			}
+			if totalerrors == len(peers) {
+				this.PackageF, err = getFileHTTP(packageUrl)
+				if err != nil {
+					return Package{}, err
+				}
+			}
 		}
+	} else {
+		filds := strings.Fields(typePackage)
+		pkt, err := packet.GetPackageDotLuaFromRemote(filds[0], filds[1])
+		if err != nil {
+			return Package{}, err
+		}
+		this.Manifest = pkt
+		return this, nil
 	}
 
 skipping:

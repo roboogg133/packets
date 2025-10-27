@@ -10,6 +10,16 @@ func getStringFromTable(table *lua.LTable, key string) string {
 	return ""
 }
 
+func getIntFromTable(table *lua.LTable, key string) int {
+	value := table.RawGetString(key)
+	if value.Type() == lua.LTNumber {
+		if num, ok := value.(lua.LNumber); ok {
+			return int(num)
+		}
+	}
+	return -133
+}
+
 func getStringArrayFromTable(L *lua.LState, table *lua.LTable, key string) []string {
 	value := table.RawGetString(key)
 	if value.Type() != lua.LTTable {

@@ -64,6 +64,9 @@ func LGitCheckout(L *lua.LState) int {
 func LGitPUll(L *lua.LState) int {
 	dir := L.CheckString(1)
 
+
+	git.PlainClone("/tmp", &git.CloneOptions{})
+
 	depth := 1
 	if L.GetTop() > 1 {
 		depth = L.CheckInt(2)

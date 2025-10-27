@@ -264,6 +264,9 @@ func ResolvDependencies(depnList map[string]string) ([]string, error) {
 		value := strings.TrimLeft(constraint, "<>=")
 
 		switch {
+		case constraint == "any":
+			filter = ""
+			order = "ORDER BY serial DESC LIMIT 1"
 		case strings.HasPrefix(constraint, ">"):
 			filter = fmt.Sprintf("AND serial > %s", value)
 			order = "ORDER BY serial DESC LIMIT 1"

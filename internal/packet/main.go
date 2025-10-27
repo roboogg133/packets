@@ -25,6 +25,8 @@ type PacketLua struct {
 	Author       string
 	Architetures []string
 	Os           []string
+	Serial       int
+	Type         string
 
 	PkgType   string
 	GitUrl    string
@@ -85,6 +87,7 @@ func ReadPacket(f []byte) (PacketLua, error) {
 		Author:      getStringFromTable(pkgTable, "author"),
 		Description: getStringFromTable(pkgTable, "description"),
 		PkgType:     getStringFromTable(pkgTable, "type"),
+		Serial:      getIntFromTable(pkgTable, "serial"),
 
 		Dependencies:      getDependenciesFromTable(L, pkgTable, "dependencies"),
 		BuildDependencies: getDependenciesFromTable(L, pkgTable, "build_dependencies"),
