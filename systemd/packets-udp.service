@@ -1,0 +1,14 @@
+[Unit]
+ Description=Respond to every request for packages in local network.
+ After=network.target
+
+[Service]
+ Type=simple
+ User=packets
+ WorkingDirectory=/etc/packets
+ ExecStart=/etc/packets/udpsocket
+ Restart=always
+
+
+[Install]
+ WantedBy=multi-user.target

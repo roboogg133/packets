@@ -253,8 +253,8 @@ func LError(L *lua.LState) int {
 		parts = append(parts, val.String())
 	}
 
-	Llogger().Panic(parts...)
+	llogger().Panic(parts...)
 	return 0
 }
 
-func Llogger() *log.Logger { return log.New(os.Stderr, "   script error: ", 0) }
+func llogger() *log.Logger { return log.New(os.Stderr, "   script error: ", 0) }

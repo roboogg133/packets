@@ -2,8 +2,8 @@ package main
 
 import (
 	"database/sql"
-	_ "embed"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,11 +14,13 @@ import (
 	"packets/configs"
 	"packets/internal/consts"
 	errors_packets "packets/internal/errors"
+	"packets/internal/packet"
 	"packets/internal/utils"
 	packets "packets/pkg"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
+	lua "github.com/yuin/gopher-lua"
 	_ "modernc.org/sqlite"
 )
 
@@ -258,7 +260,6 @@ var installCmd = &cobra.Command{
 				var wg sync.WaitGroup
 				wg.Add(1)
 				go AsyncFullyUpgrade(inputName, cfg.Config.StorePackages, filepath.Join(cfg.Config.Data_d, id), &wg, db)
-				wg.Done()
 				continue
 			}
 
@@ -362,18 +363,27 @@ var removeCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 
-				f, err := os.Open(filepath.Join(packageDir, "manifest.toml"))
+				f, err := os.Open(filepath.Join(packageDir, "Packet.lua"))
 				if err != nil {
 					log.Fatal(err)
 				}
 
-				manifest, err := utils.ManifestFileRead(f)
+				fBLob, err := io.ReadAll(f)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				manifest, err := packet.ReadPacket(fBLob)
 				if err != nil {
 					log.Fatal(err)
 				}
 				fmt.Println(":: Removing", pkgName)
 
-				packets.ExecuteRemoveScript(filepath.Join(packageDir, manifest.Hooks.Remove))
+				os.Chdir(packageDir)
+
+				if err := manifest.ExecuteRemove(lua.NewState()); err != nil {
+					log.Panic(err)
+				}
 
 				if err := os.RemoveAll(packageDir); err != nil {
 					log.Fatal(err)
@@ -649,7 +659,7 @@ func UpgradeToThis(id string, installPath string, installedDB *sql.DB, storePkgF
         serial = ?, package_d = ?, filename = ?, os = ?, arch = ?, in_cache = ?
    `,
 		p.QueryName,
-		p.Manifest.Info.Id,
+		p.Manifest.Id,
 		p.Version,
 		p.Description,
 		p.Serial,

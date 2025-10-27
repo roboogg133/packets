@@ -11,6 +11,7 @@ const (
 	LANDeadline     = 2 * time.Second
 	IndexDB         = "/etc/packets/index.db"
 	InstalledDB     = "/etc/packets/installed.db"
+	BuildImagesDir  = "/etc/packets/temp"
 	DefaultSyncUrl  = "https://servidordomal.fun/index.db"
 )
 
@@ -18,7 +19,6 @@ const InstalledDatabaseSchema = `CREATE TABLE IF NOT EXISTS packages (
     query_name      TEXT NOT NULL UNIQUE PRIMARY KEY,
     id              TEXT NOT NULL UNIQUE, 
     version         TEXT NOT NULL, 
-    dependencies    TEXT NOT NULL DEFAULT '', 
     description     TEXT NOT NULL,
     package_d       TEXT NOT NULL,
     filename        TEXT NOT NULL,
@@ -26,6 +26,7 @@ const InstalledDatabaseSchema = `CREATE TABLE IF NOT EXISTS packages (
     arch            TEXT NOT NULL,
     in_cache        INTEGER NOT NULL DEFAULT 1,
     serial          INTEGER NOT NULL,
+    type            TEXT NOT NULL,
 
     UNIQUE(query_name, version),
     UNIQUE(query_name, serial)
@@ -40,4 +41,10 @@ CREATE TABLE package_dependencies(
 );
 
 CREATE INDEX index_dependency_name ON package_dependencies(dependency_name);
+
+CREATE TABLE IF NOT EXISTS build_dependencies (
+    id TEXT PRIMARY KEY,
+    dir TEXT NOT NULL DEFAULT "/dev/null"
+    uses INTEGER NOT NULL DEFAULT 0
+);
 `

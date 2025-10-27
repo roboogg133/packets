@@ -1,19 +1,32 @@
 package configs
 
+/*
 type Manifest struct {
-	Info struct {
+	Package struct {
 		Name         string            `toml:"name"`
 		Id           string            `toml:"id"`
 		Version      string            `toml:"version"`
 		Description  string            `toml:"description"`
 		Dependencies map[string]string `toml:"dependencies"`
 		Author       string            `toml:"author"`
-	} `toml:"Info"`
+		Architeture  string            `toml:"architeture"`
+		Os           string            `toml:"os"`
+		PacakgeType  string            `toml:"type"`
+
+		GitUrl string `toml:"giturl,omitempty"`
+		Branch string `toml:"gitbranch,omitempty"`
+	} `toml:"Package"`
+	Build struct {
+		BuildDependencies map[string]string `toml:"dependencies"`
+	}
 	Hooks struct {
+		Fetch   string `toml:"fetch,omitempty"`
 		Install string `toml:"install"`
 		Remove  string `toml:"remove"`
+		Build   string `toml:"build"`
 	} `toml:"Hooks"`
 }
+*/
 
 type ConfigTOML struct {
 	Config struct {
