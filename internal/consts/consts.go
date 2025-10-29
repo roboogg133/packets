@@ -44,7 +44,7 @@ CREATE INDEX index_dependency_name ON package_dependencies(dependency_name);
 
 CREATE TABLE IF NOT EXISTS build_dependencies (
     id TEXT PRIMARY KEY,
-    dir TEXT NOT NULL DEFAULT "/dev/null"
+    dir TEXT NOT NULL DEFAULT "/dev/null",
     uses INTEGER NOT NULL DEFAULT 0
 );
 `
