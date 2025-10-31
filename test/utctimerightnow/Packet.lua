@@ -35,7 +35,7 @@ return {
 
     end,
     
-    pkg  = function() -- required 
+    install  = function() -- required 
     print("goku")
     end,
 

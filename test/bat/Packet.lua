@@ -54,7 +54,7 @@ return {
     build = function() 
     end,
     
-    pkg = function() -- required 
+    install = function() -- required 
     print("oi amores")
     end,
 

@@ -26,8 +26,8 @@ type PacketLua struct {
 	GlobalSources      *[]Source
 	GlobalDependencies *PkgDependencies
 
-	Build *lua.LFunction
-	Pkg   *lua.LFunction
+	Build   *lua.LFunction
+	Install *lua.LFunction
 }
 
 type Source struct {
@@ -121,12 +121,12 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 		GlobalDependencies: getDependenciesFromTable(pkgTable, "build_dependencies"),
 		GlobalSources:      getSourcesFromTable(pkgTable, "sources"),
 
-		Build: getFunctionFromTable(table, "build"),
-		Pkg:   getFunctionFromTable(table, "pkg"),
+		Build:   getFunctionFromTable(table, "build"),
+		Install: getFunctionFromTable(table, "install"),
 	}
 
-	if packetLua.Pkg == nil {
-		return PacketLua{}, fmt.Errorf("pkg() does not exist")
+	if packetLua.Install == nil {
+		return PacketLua{}, fmt.Errorf("install() does not exist")
 	}
 
 	return *packetLua, nil
