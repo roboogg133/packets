@@ -1,0 +1,42 @@
+local arch_map = {
+    amd64 = "x86_64",
+    aarch64 = "aarch64",
+    arm64 = "aarch64",
+    ['386'] = "i686" 
+}
+local srcarch = arch_map[CURRENT_ARCH]
+
+return {
+    package = {
+        name = "utctimerightnow", -- required
+        version = "0.1.0", -- required
+        maintainer = "robogg133", -- required
+        description = "shows utc time", -- required
+        serial = 0,-- required
+
+        dependencies = {
+            build = {"go"},
+            runtime = {},
+            conflicts = {}
+        },
+
+        sources = { --optional 
+            { 
+                url = "https://git.opentty.xyz/robogg133/utctimerightnow.git", -- required
+                method = "git", -- required
+                branch = "main" -- required 
+            --  tag = ""
+            }
+        }
+
+    },
+        
+    build = function()
+
+    end,
+    
+    pkg  = function() -- required 
+    print("goku")
+    end,
+
+}
