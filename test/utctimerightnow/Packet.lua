@@ -1,11 +1,3 @@
-local arch_map = {
-    amd64 = "x86_64",
-    aarch64 = "aarch64",
-    arm64 = "aarch64",
-    ['386'] = "i686" 
-}
-local srcarch = arch_map[CURRENT_ARCH]
-
 return {
     package = {
         name = "utctimerightnow", -- required
@@ -36,7 +28,7 @@ return {
     end,
     
     install  = function() -- required 
-    print("goku")
+        print("goku")
     end,
 
 }
