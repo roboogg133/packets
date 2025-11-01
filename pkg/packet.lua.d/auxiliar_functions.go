@@ -287,3 +287,58 @@ func parseVersionString(s string) version {
 
 	return version{}
 }
+
+func normalizeArch(arch string) string {
+	switch arch {
+	case "386":
+		return "i686"
+	case "amd64":
+		return "x86_64"
+	case "amd64p32":
+		return "x86_64"
+	case "arm":
+		return "arm"
+	case "arm64":
+		return "aarch64"
+	case "arm64be":
+		return "aarch64_be"
+	case "armbe":
+		return "armbe"
+	case "loong64":
+		return "loongarch64"
+	case "mips":
+		return "mips"
+	case "mips64":
+		return "mips64"
+	case "mips64le":
+		return "mips64el"
+	case "mips64p32":
+		return "mips64"
+	case "mips64p32le":
+		return "mips64el"
+	case "mipsle":
+		return "mipsel"
+	case "ppc":
+		return "powerpc"
+	case "ppc64":
+		return "ppc64"
+	case "ppc64le":
+		return "ppc64le"
+	case "riscv":
+		return "riscv"
+	case "riscv64":
+		return "riscv64"
+	case "s390":
+		return "s390"
+	case "s390x":
+		return "s390x"
+	case "sparc":
+		return "sparc"
+	case "sparc64":
+		return "sparc64"
+	case "wasm":
+		return "wasm"
+	default:
+		return arch
+	}
+}
