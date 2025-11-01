@@ -24,11 +24,15 @@ return {
     },
         
     build = function()
-
+     --   os.setenv("GOPATH", pathjoin(SOURCESDIR, "gopath"))
+        os.chdir(pathjoin(SOURCESDIR, "utctimerightnow"))
+        os.execute('go build -trimpath -ldflags="-s -w" -o utctimerightnow main.go')
+        os.chmod(utctimerightnow, 0777)
     end,
     
     install  = function() -- required 
-        print("goku")
+        os.copy(pathjoin(SOURCESDIR, "utctimerightnow", "utctimerightnow"), pathjoin(PACKETDIR, BIN_DIR, "utctimerightnow"))
+        os.copy(pathjoin(SOURCESDIR, "utctimerightnow", "LICENSE"), pathjoin(PACKETDIR, "/usr/share/licenses/utctimerightnow/LICENSE"))
     end,
 
 }

@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"time"
 
+	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/klauspost/compress/zstd"
 
 	lua_utils "github.com/roboogg133/packets/internal/lua"
@@ -35,6 +38,7 @@ type PacketLua struct {
 	Build     *lua.LFunction
 	Install   *lua.LFunction
 	PreRemove *lua.LFunction
+	LuaState  *lua.LState
 }
 
 type Source struct {
@@ -85,16 +89,16 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 	cfg = checkConfig(cfg)
 
 	L := lua.NewState()
-	defer L.Close()
+
+	L.SetGlobal("error", L.NewFunction(lua_utils.LError))
 
 	osObject := L.GetGlobal("os").(*lua.LTable)
-	osObject.RawSetString("setenv", L.NewFunction(lua_utils.LSetEnv))
 	ioObject := L.GetGlobal("io").(*lua.LTable)
 
 	L.SetGlobal("os", lua.LNil)
 	L.SetGlobal("io", lua.LNil)
 
-	L.SetGlobal("BIN_DIR", lua.LString(*cfg.BinDir))
+	L.SetGlobal("BIN_DIR", lua.LString(cfg.BinDir))
 	L.SetGlobal("CURRENT_ARCH", lua.LString(runtime.GOARCH))
 	L.SetGlobal("CURRENT_ARCH_NORMALIZED", lua.LString(normalizeArch(runtime.GOARCH)))
 	L.SetGlobal("CURRENT_PLATAFORM", lua.LString(runtime.GOOS))
@@ -139,6 +143,7 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 		PreRemove: getFunctionFromTable(table, "pre_remove"),
 	}
 
+	packetLua.LuaState = L
 	if packetLua.Install == nil {
 		return PacketLua{}, ErrInstallFunctionDoesNotExist
 	}
@@ -179,11 +184,8 @@ func ReadPacketFromZSTDF(file io.Reader, cfg *Config) (PacketLua, error) {
 	return PacketLua{}, ErrCantFindPacketDotLua
 }
 
-type GetSourceConfig struct {
-	PacketDir *string
-}
-
-func GetSource(url, method string, info any) ([]byte, error) {
+// GetSource returns file []byte if method is "GET" or "POST", if is "git" returns *git.CloneOptions{}
+func GetSource(url, method string, info any, tryAttempts int) (any, error) {
 
 	switch method {
 	case "GET":
@@ -194,15 +196,24 @@ func GetSource(url, method string, info any) ([]byte, error) {
 
 		specs := info.(GETSpecs)
 
-		for k, v := range *specs.Headers {
-			req.Header.Set(k, v)
+		if specs.Headers != nil {
+			for k, v := range *specs.Headers {
+				req.Header.Set(k, v)
+			}
 		}
 
 		client := http.Client{Timeout: 5 * time.Minute}
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
+		var resp *http.Response
+		for i := 0; i < tryAttempts; i++ {
+			resp, err = client.Do(req)
+			if err != nil {
+				return nil, err
+			}
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				break
+			}
+			resp.Body.Close()
 		}
 
 		defer resp.Body.Close()
@@ -231,15 +242,24 @@ func GetSource(url, method string, info any) ([]byte, error) {
 			return nil, err
 		}
 
-		for k, v := range *specs.Headers {
-			req.Header.Set(k, v)
+		if specs.Headers != nil {
+			for k, v := range *specs.Headers {
+				req.Header.Set(k, v)
+			}
 		}
 
 		client := http.Client{Timeout: 5 * time.Minute}
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
+		var resp *http.Response
+		for i := 0; i < tryAttempts; i++ {
+			resp, err = client.Do(req)
+			if err != nil {
+				return nil, err
+			}
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				break
+			}
+			resp.Body.Close()
 		}
 
 		defer resp.Body.Close()
@@ -254,6 +274,25 @@ func GetSource(url, method string, info any) ([]byte, error) {
 		}
 
 		return data, nil
+
+	case "git":
+		specs := info.(GitSpecs)
+
+		if specs.Tag == nil {
+			return &git.CloneOptions{
+				URL:           url,
+				SingleBranch:  true,
+				ReferenceName: plumbing.NewBranchReferenceName(specs.Branch),
+				Depth:         1,
+			}, nil
+		} else {
+			return &git.CloneOptions{
+				URL:           url,
+				SingleBranch:  true,
+				ReferenceName: plumbing.NewTagReferenceName(*specs.Tag),
+				Depth:         1,
+			}, nil
+		}
 	}
 
 	return nil, fmt.Errorf("invalid method")
@@ -264,4 +303,72 @@ func verifySHA256(checksum string, src []byte) bool {
 	check := sha256.Sum256(src)
 
 	return hex.EncodeToString(check[:]) == checksum
+}
+
+func (pkg PacketLua) ExecuteBuild(cfg *Config) error {
+	L := pkg.LuaState
+
+	L.SetGlobal("error", L.NewFunction(lua_utils.LError))
+
+	osObject := L.GetGlobal("os").(*lua.LTable)
+	osObject.RawSetString("chdir", L.NewFunction(lua_utils.LCD))
+	osObject.RawSetString("setenv", L.NewFunction(lua_utils.LSetEnv))
+	osObject.RawSetString("copy", L.NewFunction(lua_utils.LCopy))
+	osObject.RawSetString("mkdir", L.NewFunction(lua_utils.LMkdir))
+	osObject.RawSetString("remove", L.NewFunction(lua_utils.LRemove))
+	osObject.RawSetString("rename", L.NewFunction(lua_utils.LRename))
+	osObject.RawSetString("symlink", L.NewFunction(lua_utils.LSymlink))
+	osObject.RawSetString("chmod", L.NewFunction(lua_utils.LChmod))
+
+	L.SetGlobal("BIN_DIR", lua.LString(cfg.BinDir))
+	L.SetGlobal("CURRENT_ARCH", lua.LString(runtime.GOARCH))
+	L.SetGlobal("CURRENT_ARCH_NORMALIZED", lua.LString(normalizeArch(runtime.GOARCH)))
+	L.SetGlobal("CURRENT_PLATAFORM", lua.LString(runtime.GOOS))
+
+	L.SetGlobal("SOURCESDIR", lua.LString(cfg.SourcesDir))
+	L.SetGlobal("PACKETDIR", lua.LString(cfg.PacketDir))
+
+	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
+
+	os.Chdir(cfg.RootDir)
+
+	os.Setenv("PATH", os.Getenv("PATH")+":"+cfg.BinDir)
+
+	L.Push(pkg.Build)
+	return L.PCall(0, 0, nil)
+}
+
+func (pkg PacketLua) ExecuteInstall(cfg *Config) error {
+	L := pkg.LuaState
+	defer L.Close()
+
+	L.SetGlobal("error", L.NewFunction(lua_utils.LError))
+
+	osObject := L.GetGlobal("os").(*lua.LTable)
+	osObject.RawSetString("chdir", L.NewFunction(lua_utils.LCD))
+	osObject.RawSetString("setenv", L.NewFunction(lua_utils.LSetEnv))
+	osObject.RawSetString("copy", L.NewFunction(lua_utils.LCopy))
+	osObject.RawSetString("mkdir", L.NewFunction(lua_utils.LMkdir))
+	osObject.RawSetString("remove", L.NewFunction(lua_utils.LRemove))
+	osObject.RawSetString("rename", L.NewFunction(lua_utils.LRename))
+	osObject.RawSetString("symlink", L.NewFunction(lua_utils.LSymlink))
+	osObject.RawSetString("chmod", L.NewFunction(lua_utils.LChmod))
+
+	L.SetGlobal("BIN_DIR", lua.LString(cfg.BinDir))
+	L.SetGlobal("CURRENT_ARCH", lua.LString(runtime.GOARCH))
+	L.SetGlobal("CURRENT_ARCH_NORMALIZED", lua.LString(normalizeArch(runtime.GOARCH)))
+	L.SetGlobal("CURRENT_PLATAFORM", lua.LString(runtime.GOOS))
+
+	L.SetGlobal("SOURCESDIR", lua.LString(cfg.SourcesDir))
+	L.SetGlobal("PACKETDIR", lua.LString(cfg.PacketDir))
+
+	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
+
+	os.Chdir(cfg.RootDir)
+
+	os.Setenv("PATH", os.Getenv("PATH")+":"+cfg.BinDir)
+	L.Push(pkg.Install)
+	L.Call(0, 0)
+
+	return nil
 }

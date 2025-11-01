@@ -39,6 +39,7 @@ func LCopy(L *lua.LState) int {
 	oldname := L.CheckString(1)
 	newname := L.CheckString(2)
 
+	os.MkdirAll(filepath.Dir(newname), 0755)
 	if err := copyDir(oldname, newname); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString(err.Error()))
@@ -115,6 +116,35 @@ func LSetEnv(L *lua.LState) int {
 	value := L.CheckString(2)
 	os.Setenv(env, value)
 	return 0
+}
+
+func LCD(L *lua.LState) int {
+	dir := L.CheckString(1)
+
+	if err := os.Chdir(dir); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	L.Push(lua.LTrue)
+	L.Push(lua.LNil)
+	return 2
+}
+
+func LChmod(L *lua.LState) int {
+	f := L.CheckString(1)
+	mode := L.CheckInt(2)
+
+	if err := os.Chmod(f, os.FileMode(mode)); err != nil {
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	L.Push(lua.LTrue)
+	L.Push(lua.LNil)
+	return 2
 }
 
 func llogger() *log.Logger { return log.New(os.Stderr, "script error: ", 0) }

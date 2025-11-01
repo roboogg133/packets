@@ -44,10 +44,17 @@ return {
     },
         
     build = function() 
+        
     end,
     
-    install = function() -- required 
-    print("oi amores")
+    install = function() 
+      
+
+
+        local suc, errmsg = os.copy(pathjoin(SOURCESDIR,"bat-v0.26.0-".. CURRENT_ARCH_NORMALIZED .."-unknown-linux-gnu", "bat"), pathjoin(PACKETDIR, BIN_DIR, "bat"))
+        if not suc then
+            error(errmsg)
+        end
     end,
 
 }
