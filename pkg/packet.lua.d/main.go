@@ -2,14 +2,20 @@ package packet
 
 import (
 	"archive/tar"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 
+	lua_utils "github.com/roboogg133/packets/internal/lua"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -26,14 +32,15 @@ type PacketLua struct {
 	GlobalSources      *[]Source
 	GlobalDependencies *PkgDependencies
 
-	Build   *lua.LFunction
-	Install *lua.LFunction
+	Build     *lua.LFunction
+	Install   *lua.LFunction
+	PreRemove *lua.LFunction
 }
 
 type Source struct {
 	Method string
 	Url    string
-	Specs  interface{}
+	Specs  any
 }
 
 type VersionConstraint string
@@ -70,6 +77,8 @@ type GETSpecs struct {
 var ErrCantFindPacketDotLua = errors.New("can't find Packet.lua in .tar.zst file")
 var ErrFileDontReturnTable = errors.New("invalid Packet.lua format: the file do not return a table")
 var ErrCannotFindPackageTable = errors.New("invalid Packet.lua format: can't find package table")
+var ErrInstallFunctionDoesNotExist = errors.New("can not find instal()")
+var ErrSha256Sum = errors.New("false checksum")
 
 // ReadPacket read a Packet.lua and alredy set global vars
 func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
@@ -79,14 +88,18 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 	defer L.Close()
 
 	osObject := L.GetGlobal("os").(*lua.LTable)
+	osObject.RawSetString("setenv", L.NewFunction(lua_utils.LSetEnv))
 	ioObject := L.GetGlobal("io").(*lua.LTable)
 
 	L.SetGlobal("os", lua.LNil)
 	L.SetGlobal("io", lua.LNil)
 
-	L.SetGlobal("BIN_DIR", lua.LString(cfg.BinDir))
+	L.SetGlobal("BIN_DIR", lua.LString(*cfg.BinDir))
 	L.SetGlobal("CURRENT_ARCH", lua.LString(runtime.GOARCH))
+	L.SetGlobal("CURRENT_ARCH_NORMALIZED", lua.LString(normalizeArch(runtime.GOARCH)))
 	L.SetGlobal("CURRENT_PLATAFORM", lua.LString(runtime.GOOS))
+
+	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
 
 	if err := L.DoString(string(f)); err != nil {
 		return PacketLua{}, err
@@ -121,12 +134,13 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 		GlobalDependencies: getDependenciesFromTable(pkgTable, "build_dependencies"),
 		GlobalSources:      getSourcesFromTable(pkgTable, "sources"),
 
-		Build:   getFunctionFromTable(table, "build"),
-		Install: getFunctionFromTable(table, "install"),
+		Build:     getFunctionFromTable(table, "build"),
+		Install:   getFunctionFromTable(table, "install"),
+		PreRemove: getFunctionFromTable(table, "pre_remove"),
 	}
 
 	if packetLua.Install == nil {
-		return PacketLua{}, fmt.Errorf("install() does not exist")
+		return PacketLua{}, ErrInstallFunctionDoesNotExist
 	}
 
 	return *packetLua, nil
@@ -163,4 +177,91 @@ func ReadPacketFromZSTDF(file io.Reader, cfg *Config) (PacketLua, error) {
 
 	}
 	return PacketLua{}, ErrCantFindPacketDotLua
+}
+
+type GetSourceConfig struct {
+	PacketDir *string
+}
+
+func GetSource(url, method string, info any) ([]byte, error) {
+
+	switch method {
+	case "GET":
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		specs := info.(GETSpecs)
+
+		for k, v := range *specs.Headers {
+			req.Header.Set(k, v)
+		}
+
+		client := http.Client{Timeout: 5 * time.Minute}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		defer resp.Body.Close()
+
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		if !verifySHA256(*specs.SHA256, data) {
+			return nil, ErrSha256Sum
+		}
+
+		return data, nil
+	case "POST":
+		specs := info.(POSTSpecs)
+		var body *bytes.Reader
+
+		if specs.Body != nil {
+			body = bytes.NewReader([]byte(*specs.Body))
+		} else {
+			body = nil
+		}
+		req, err := http.NewRequest("POST", url, body)
+		if err != nil {
+			return nil, err
+		}
+
+		for k, v := range *specs.Headers {
+			req.Header.Set(k, v)
+		}
+
+		client := http.Client{Timeout: 5 * time.Minute}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		defer resp.Body.Close()
+
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		if !verifySHA256(*specs.SHA256, data) {
+			return nil, ErrSha256Sum
+		}
+
+		return data, nil
+	}
+
+	return nil, fmt.Errorf("invalid method")
+}
+
+func verifySHA256(checksum string, src []byte) bool {
+
+	check := sha256.Sum256(src)
+
+	return hex.EncodeToString(check[:]) == checksum
 }

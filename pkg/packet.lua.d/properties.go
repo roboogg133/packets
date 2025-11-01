@@ -1,9 +1,5 @@
 package packet
 
-import (
-	"fmt"
-)
-
 func (pkg PacketLua) IsValid() bool {
 
 	var a, b int
@@ -15,8 +11,7 @@ func (pkg PacketLua) IsValid() bool {
 
 	a += len(*pkg.GlobalSources)
 
-	if a <= 0 || b <= 0 {
-		fmt.Println("invalid")
+	if a < 1 || len(*pkg.Plataforms) > b {
 		return false
 	}
 
@@ -26,7 +21,5 @@ func (pkg PacketLua) IsValid() bool {
 	case pkg.Description == "" || pkg.Maintaner == "" || pkg.Name == "" || pkg.Version == "":
 		return false
 	}
-
-	fmt.Println("valid")
 	return true
 }
