@@ -48,10 +48,10 @@ return {
     end,
     
     install = function() 
-      
-
-
-        local suc, errmsg = os.copy(pathjoin(SOURCESDIR,"bat-v0.26.0-".. CURRENT_ARCH_NORMALIZED .."-unknown-linux-gnu", "bat"), pathjoin(PACKETDIR, BIN_DIR, "bat"))
+    
+        os.chdir(pathjoin(SOURCESDIR,"bat-v0.26.0-".. CURRENT_ARCH_NORMALIZED .."-unknown-linux-gnu"))
+        os.chmod("bat",0777)
+        local suc, errmsg = os.copy("bat", pathjoin(PACKETDIR, BIN_DIR, "bat"))
         if not suc then
             error(errmsg)
         end
