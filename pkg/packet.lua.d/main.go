@@ -35,6 +35,8 @@ type PacketLua struct {
 	GlobalSources      *[]Source
 	GlobalDependencies *PkgDependencies
 
+	Flags *[]lua_utils.Flag
+
 	Build     *lua.LFunction
 	Install   *lua.LFunction
 	PreRemove *lua.LFunction
@@ -81,7 +83,7 @@ type GETSpecs struct {
 var ErrCantFindPacketDotLua = errors.New("can't find Packet.lua in .tar.zst file")
 var ErrFileDontReturnTable = errors.New("invalid Packet.lua format: the file do not return a table")
 var ErrCannotFindPackageTable = errors.New("invalid Packet.lua format: can't find package table")
-var ErrInstallFunctionDoesNotExist = errors.New("can not find instal()")
+var ErrInstallFunctionDoesNotExist = errors.New("can not find install()")
 var ErrSha256Sum = errors.New("false checksum")
 
 // ReadPacket read a Packet.lua and alredy set global vars
@@ -103,6 +105,8 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 	L.SetGlobal("CURRENT_ARCH_NORMALIZED", lua.LString(normalizeArch(runtime.GOARCH)))
 	L.SetGlobal("CURRENT_PLATAFORM", lua.LString(runtime.GOOS))
 
+	var newFlags lua_utils.Flags
+	L.SetGlobal("setflags", L.NewFunction(newFlags.LSetFlag))
 	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
 
 	if err := L.DoString(string(f)); err != nil {
@@ -141,6 +145,10 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 		Build:     getFunctionFromTable(table, "build"),
 		Install:   getFunctionFromTable(table, "install"),
 		PreRemove: getFunctionFromTable(table, "pre_remove"),
+	}
+
+	if len(newFlags.Flags) > 0 {
+		packetLua.Flags = &newFlags.Flags
 	}
 
 	packetLua.LuaState = L
@@ -205,7 +213,7 @@ func GetSource(url, method string, info any, tryAttempts int) (any, error) {
 		client := http.Client{Timeout: 5 * time.Minute}
 
 		var resp *http.Response
-		for i := 0; i < tryAttempts; i++ {
+		for range tryAttempts {
 			resp, err = client.Do(req)
 			if err != nil {
 				return nil, err
@@ -251,7 +259,7 @@ func GetSource(url, method string, info any, tryAttempts int) (any, error) {
 		client := http.Client{Timeout: 5 * time.Minute}
 
 		var resp *http.Response
-		for i := 0; i < tryAttempts; i++ {
+		for range tryAttempts {
 			resp, err = client.Do(req)
 			if err != nil {
 				return nil, err
@@ -328,6 +336,8 @@ func (pkg PacketLua) ExecuteBuild(cfg *Config) error {
 	L.SetGlobal("SOURCESDIR", lua.LString(cfg.SourcesDir))
 	L.SetGlobal("PACKETDIR", lua.LString(cfg.PacketDir))
 
+	var newFlags lua_utils.Flags
+	L.SetGlobal("setflags", L.NewFunction(newFlags.LSetFlag))
 	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
 
 	os.Chdir(cfg.RootDir)
@@ -335,7 +345,14 @@ func (pkg PacketLua) ExecuteBuild(cfg *Config) error {
 	os.Setenv("PATH", os.Getenv("PATH")+":"+cfg.BinDir)
 
 	L.Push(pkg.Build)
-	return L.PCall(0, 0, nil)
+	L.Call(0, 0)
+
+	if len(newFlags.Flags) > 0 && pkg.Flags != nil {
+		*pkg.Flags = append(*pkg.Flags, newFlags.Flags...)
+	} else if len(newFlags.Flags) > 0 {
+		*pkg.Flags = newFlags.Flags
+	}
+	return nil
 }
 
 func (pkg PacketLua) ExecuteInstall(cfg *Config) error {
@@ -362,13 +379,21 @@ func (pkg PacketLua) ExecuteInstall(cfg *Config) error {
 	L.SetGlobal("SOURCESDIR", lua.LString(cfg.SourcesDir))
 	L.SetGlobal("PACKETDIR", lua.LString(cfg.PacketDir))
 
+	var newFlags lua_utils.Flags
+	L.SetGlobal("setflags", L.NewFunction(newFlags.LSetFlag))
 	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
 
 	os.Chdir(cfg.RootDir)
 
 	os.Setenv("PATH", os.Getenv("PATH")+":"+cfg.BinDir)
+
 	L.Push(pkg.Install)
 	L.Call(0, 0)
 
+	if len(newFlags.Flags) > 0 && pkg.Flags != nil {
+		*pkg.Flags = append(*pkg.Flags, newFlags.Flags...)
+	} else if len(newFlags.Flags) > 0 {
+		*pkg.Flags = newFlags.Flags
+	}
 	return nil
 }

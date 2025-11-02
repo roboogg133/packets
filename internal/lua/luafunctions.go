@@ -147,4 +147,28 @@ func LChmod(L *lua.LState) int {
 	return 2
 }
 
+type Flag struct {
+	Name     string
+	Path     string
+	FlagType string
+}
+
+type Flags struct {
+	Flags []Flag
+}
+
+func (f Flags) LSetFlag(L *lua.LState) int {
+	flagtype := L.CheckString(1)
+	name := L.CheckString(2)
+	flagPath := L.CheckString(3)
+
+	f.Flags = append(f.Flags, Flag{
+		Name:     name,
+		Path:     flagPath,
+		FlagType: flagtype,
+	})
+
+	return 0
+}
+
 func llogger() *log.Logger { return log.New(os.Stderr, "script error: ", 0) }
