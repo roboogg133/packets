@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/roboogg133/packets/pkg/install"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 	"github.com/spf13/cobra"
 )
@@ -92,10 +93,20 @@ var executeCmd = &cobra.Command{
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}
-
 			pkg.ExecuteBuild(configs)
 			pkg.ExecuteInstall(configs)
 			os.Chdir(backupDir)
+
+			files, err := install.GetPackageFiles(configs.PacketDir)
+			if err != nil {
+				fmt.Printf("error: %s", err.Error())
+				os.Exit(1)
+			}
+
+			if err := install.InstallFiles(files, configs.PacketDir); err != nil {
+				fmt.Printf("error: %s", err.Error())
+				os.Exit(1)
+			}
 
 		}
 	},
