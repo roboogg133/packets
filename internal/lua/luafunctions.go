@@ -1,9 +1,11 @@
 package lua
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -39,7 +41,7 @@ func LCopy(L *lua.LState) int {
 	oldname := L.CheckString(1)
 	newname := L.CheckString(2)
 
-	os.MkdirAll(filepath.Dir(newname), 0755)
+	_ = os.MkdirAll(filepath.Dir(newname), 0755)
 	if err := copyDir(oldname, newname); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString(err.Error()))
@@ -87,7 +89,17 @@ func LMkdir(L *lua.LState) int {
 	path := L.CheckString(1)
 	perm := L.CheckInt(2)
 
-	if err := os.MkdirAll(path, os.FileMode(perm)); err != nil {
+	modeStr := strconv.Itoa(perm)
+	modeUint, err := strconv.ParseUint(modeStr, 8, 32)
+	if err != nil {
+		fmt.Println("Error parsing mode:", err)
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	if err := os.MkdirAll(path, os.FileMode(modeUint)); err != nil {
+		fmt.Println("Error creating directory:", err)
 		L.Push(lua.LFalse)
 		L.Push(lua.LString(err.Error()))
 		return 2
@@ -136,7 +148,16 @@ func LChmod(L *lua.LState) int {
 	f := L.CheckString(1)
 	mode := L.CheckInt(2)
 
-	if err := os.Chmod(f, os.FileMode(mode)); err != nil {
+	modeStr := strconv.Itoa(mode)
+	modeUint, err := strconv.ParseUint(modeStr, 8, 32)
+	if err != nil {
+		fmt.Println("Error parsing mode:", err)
+		L.Push(lua.LFalse)
+		L.Push(lua.LString(err.Error()))
+		return 2
+	}
+
+	if err := os.Chmod(f, os.FileMode(modeUint)); err != nil {
 		L.Push(lua.LFalse)
 		L.Push(lua.LString(err.Error()))
 		return 2
@@ -157,7 +178,7 @@ type Flags struct {
 	Flags []Flag
 }
 
-func (f Flags) LSetFlag(L *lua.LState) int {
+func (f *Flags) LSetFlag(L *lua.LState) int {
 	flagtype := L.CheckString(1)
 	name := L.CheckString(2)
 	flagPath := L.CheckString(3)

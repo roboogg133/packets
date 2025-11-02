@@ -35,7 +35,7 @@ type PacketLua struct {
 	GlobalSources      *[]Source
 	GlobalDependencies *PkgDependencies
 
-	Flags *[]lua_utils.Flag
+	Flags []lua_utils.Flag
 
 	Build     *lua.LFunction
 	Install   *lua.LFunction
@@ -147,9 +147,7 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 		PreRemove: getFunctionFromTable(table, "pre_remove"),
 	}
 
-	if len(newFlags.Flags) > 0 {
-		packetLua.Flags = &newFlags.Flags
-	}
+	packetLua.Flags = append(packetLua.Flags, newFlags.Flags...)
 
 	packetLua.LuaState = L
 	if packetLua.Install == nil {
@@ -313,7 +311,7 @@ func verifySHA256(checksum string, src []byte) bool {
 	return hex.EncodeToString(check[:]) == checksum
 }
 
-func (pkg PacketLua) ExecuteBuild(cfg *Config) error {
+func (pkg *PacketLua) ExecuteBuild(cfg *Config) {
 	L := pkg.LuaState
 
 	L.SetGlobal("error", L.NewFunction(lua_utils.LError))
@@ -347,15 +345,10 @@ func (pkg PacketLua) ExecuteBuild(cfg *Config) error {
 	L.Push(pkg.Build)
 	L.Call(0, 0)
 
-	if len(newFlags.Flags) > 0 && pkg.Flags != nil {
-		*pkg.Flags = append(*pkg.Flags, newFlags.Flags...)
-	} else if len(newFlags.Flags) > 0 {
-		*pkg.Flags = newFlags.Flags
-	}
-	return nil
+	pkg.Flags = append(pkg.Flags, newFlags.Flags...)
 }
 
-func (pkg PacketLua) ExecuteInstall(cfg *Config) error {
+func (pkg *PacketLua) ExecuteInstall(cfg *Config) {
 	L := pkg.LuaState
 	defer L.Close()
 
@@ -390,10 +383,6 @@ func (pkg PacketLua) ExecuteInstall(cfg *Config) error {
 	L.Push(pkg.Install)
 	L.Call(0, 0)
 
-	if len(newFlags.Flags) > 0 && pkg.Flags != nil {
-		*pkg.Flags = append(*pkg.Flags, newFlags.Flags...)
-	} else if len(newFlags.Flags) > 0 {
-		*pkg.Flags = newFlags.Flags
-	}
-	return nil
+	pkg.Flags = append(pkg.Flags, newFlags.Flags...)
+
 }

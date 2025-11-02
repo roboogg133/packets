@@ -33,10 +33,11 @@ func walkAll(dirToWalk string) ([]BasicFileStatus, error) {
 		}
 		filesSlice = append(filesSlice, *basicStat)
 		if v.IsDir() {
-			filesSlice, err = walkAll(filepath.Join(dirToWalk, v.Name()))
+			tmp, err := walkAll(filepath.Join(dirToWalk, v.Name()))
 			if err != nil {
 				return []BasicFileStatus{}, err
 			}
+			filesSlice = append(filesSlice, tmp...)
 		}
 	}
 
@@ -47,9 +48,15 @@ func InstallFiles(files []BasicFileStatus, packetDir string) error {
 	for i, v := range files {
 		sysPath, _ := strings.CutPrefix(v.Filepath, packetDir)
 		fmt.Printf("[%d] Installing file %s\n", i, v.Filepath)
-		fmt.Printf("[%d] NEED tro track file %s\n", i, sysPath)
-		if err := copyFile(v.Filepath, sysPath); err != nil {
-			return err
+		fmt.Printf("[%d] NEED to track file %s\n", i, sysPath)
+		if v.IsDir {
+			if err := os.MkdirAll(sysPath, v.PermMode.Perm()); err != nil {
+				return err
+			}
+		} else {
+			if err := copyFile(v.Filepath, sysPath); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -67,7 +74,7 @@ func copyFile(source string, destination string) error {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Dir(destination), 0o755)
+	err = os.MkdirAll(filepath.Dir(destination), 0755)
 	if err != nil {
 		return err
 	}
