@@ -56,6 +56,8 @@ return {
         if not suc then
             error("failed to copy bat: " .. errmsg)
         end
+
+        os.copy("bat.1", pathjoin(PACKETDIR, "/usr/share/man/man1/bat.1"))
     end,
 
 }

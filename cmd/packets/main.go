@@ -15,6 +15,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func GrantPrivilegies() {
+	if os.Geteuid() != 0 {
+		fmt.Println("error: this operation must be run as root")
+		os.Exit(1)
+	}
+}
+
 var Config *PacketsConfiguration
 
 var rootCmd = &cobra.Command{
@@ -29,14 +36,10 @@ var executeCmd = &cobra.Command{
 	Long:  "Installs a package from a given Packet.lua file",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
+		GrantPrivilegies()
 		return GetConfiguration()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		if os.Geteuid() != 0 {
-			fmt.Println("error: this operation must be run as root")
-			os.Exit(1)
-		}
-
 		for _, v := range args {
 			if !strings.HasSuffix(v, ".lua") {
 				fmt.Printf("error: %s need to have .lua suffix\n", v)
@@ -127,7 +130,7 @@ var executeCmd = &cobra.Command{
 			defer db.Close()
 
 			database.PrepareDataBase(db)
-			if err := database.MarkAsInstalled(pkg, db, nil); err != nil {
+			if err := database.MarkAsInstalled(pkg, files, configs.PacketDir, pkg.Flags, db, nil, 0); err != nil {
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}
@@ -135,7 +138,60 @@ var executeCmd = &cobra.Command{
 	},
 }
 
+var removeCmd = &cobra.Command{
+	Use:   "remove {name or id}",
+	Short: "Removes a package from the system",
+	Long:  "Removes a package from the system",
+	Args:  cobra.MinimumNArgs(1),
+	PreRun: func(cmd *cobra.Command, args []string) {
+		GrantPrivilegies()
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		for _, arg := range args {
+
+			db, err := sql.Open("sqlite3", InternalDB)
+			if err != nil {
+				fmt.Printf("error: %s\n", err.Error())
+				os.Exit(1)
+			}
+			defer db.Close()
+
+			id, err := database.GetPackageId(arg, db)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					fmt.Printf("package %s not found\n", arg)
+					continue
+				}
+				fmt.Printf("error: %s\n", err.Error())
+				continue
+			}
+
+			files, err := database.GetPackageFiles(id, db)
+			if err != nil {
+				fmt.Printf("error: %s\n", err.Error())
+				continue
+			}
+
+			for _, file := range files {
+				if !file.IsDir {
+					if err := os.Remove(file.Filepath); err != nil {
+						fmt.Printf("error: %s\n", err.Error())
+						continue
+					}
+				}
+			}
+
+			if err := database.MarkAsUninstalled(id.ID, db); err != nil {
+				fmt.Printf("error removing package from database but successfully removed it from the system: %s\n", err.Error())
+				continue
+			}
+
+		}
+	},
+}
+
 func main() {
 	rootCmd.AddCommand(executeCmd)
+	rootCmd.AddCommand(removeCmd)
 	rootCmd.Execute()
 }
