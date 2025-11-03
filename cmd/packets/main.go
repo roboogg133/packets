@@ -1,12 +1,15 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/roboogg133/packets/cmd/packets/database"
 	"github.com/roboogg133/packets/pkg/install"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 	"github.com/spf13/cobra"
@@ -29,6 +32,10 @@ var executeCmd = &cobra.Command{
 		return GetConfiguration()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		if os.Geteuid() != 0 {
+			fmt.Println("error: this operation must be run as root")
+			os.Exit(1)
+		}
 
 		for _, v := range args {
 			if !strings.HasSuffix(v, ".lua") {
@@ -93,8 +100,12 @@ var executeCmd = &cobra.Command{
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}
+
+			_ = ChangeToNoPermission()
 			pkg.ExecuteBuild(configs)
 			pkg.ExecuteInstall(configs)
+			_ = ElevatePermission()
+
 			os.Chdir(backupDir)
 
 			files, err := install.GetPackageFiles(configs.PacketDir)
@@ -108,6 +119,18 @@ var executeCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
+			db, err := sql.Open("sqlite3", InternalDB)
+			if err != nil {
+				fmt.Printf("error: %s", err.Error())
+				os.Exit(1)
+			}
+			defer db.Close()
+
+			database.PrepareDataBase(db)
+			if err := database.MarkAsInstalled(pkg, db, nil); err != nil {
+				fmt.Printf("error: %s", err.Error())
+				os.Exit(1)
+			}
 		}
 	},
 }

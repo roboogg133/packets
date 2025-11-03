@@ -1,7 +1,6 @@
 package install
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -45,10 +44,8 @@ func walkAll(dirToWalk string) ([]BasicFileStatus, error) {
 }
 
 func InstallFiles(files []BasicFileStatus, packetDir string) error {
-	for i, v := range files {
+	for _, v := range files {
 		sysPath, _ := strings.CutPrefix(v.Filepath, packetDir)
-		fmt.Printf("[%d] Installing file %s\n", i, v.Filepath)
-		fmt.Printf("[%d] NEED to track file %s\n", i, sysPath)
 		if v.IsDir {
 			if err := os.MkdirAll(sysPath, v.PermMode.Perm()); err != nil {
 				return err

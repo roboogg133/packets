@@ -27,7 +27,7 @@ type OperationalSystem string
 type PacketLua struct {
 	Name        string
 	Version     string
-	Maintaner   string
+	Maintainer  string
 	Description string
 	Serial      int
 
@@ -133,7 +133,7 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 	packetLua := &PacketLua{
 		Name:        getStringFromTable(pkgTable, "name"),
 		Version:     getStringFromTable(pkgTable, "version"),
-		Maintaner:   getStringFromTable(pkgTable, "maintainer"),
+		Maintainer:  getStringFromTable(pkgTable, "maintainer"),
 		Description: getStringFromTable(pkgTable, "description"),
 		Serial:      getIntFromTable(pkgTable, "serial"),
 

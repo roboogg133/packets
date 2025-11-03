@@ -18,7 +18,7 @@ func (pkg PacketLua) IsValid() bool {
 	switch {
 	case pkg.Serial == -133:
 		return false
-	case pkg.Description == "" || pkg.Maintaner == "" || pkg.Name == "" || pkg.Version == "":
+	case pkg.Description == "" || pkg.Maintainer == "" || pkg.Name == "" || pkg.Version == "":
 		return false
 	}
 	return true

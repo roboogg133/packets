@@ -89,3 +89,13 @@ func MarkAsInstalled(pkg packet.PacketLua, db *sql.DB, image *[]byte) error {
 	}
 	return nil
 }
+
+func MarkAsUninstalled(id string, db *sql.DB) error {
+	_, err := db.Exec("DELETE FROM installed_packages WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func PrepareDataBase(db *sql.DB) { _, _ = db.Exec(CreateInstructions) }
