@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path"
@@ -21,8 +22,10 @@ func DownloadSource(sources *[]packet.Source, configs *packet.Config) error {
 		if source.Method == "GET" || source.Method == "POST" {
 			f := downloaded.([]byte)
 
+			buf := bytes.NewBuffer(f)
 			_ = os.MkdirAll(configs.SourcesDir, 0755)
-			if err := decompress.Decompress(f, configs.SourcesDir, path.Base(source.Url)); err != nil {
+
+			if err := decompress.Decompress(buf, configs.SourcesDir, path.Base(source.Url)); err != nil {
 				return fmt.Errorf("error: %s", err.Error())
 			}
 		} else {

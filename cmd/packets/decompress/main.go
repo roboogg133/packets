@@ -43,40 +43,43 @@ func extractZipFile(file *zip.File, dest string) error {
 	return err
 }
 
-func Decompress(data []byte, outputDir, filename string) error {
+func Decompress(data io.Reader, outputDir, filename string) error {
 
 	var reader io.Reader
 	switch {
 	case strings.HasSuffix(filename, ".gz"):
 		var err error
-		reader, err = gzip.NewReader(bytes.NewReader(data))
+		reader, err = gzip.NewReader(data)
 		if err != nil {
 			return err
 		}
 		filename, _ = strings.CutSuffix(filename, ".gz")
 	case strings.HasSuffix(filename, ".xz"):
 		var err error
-		reader, err = xz.NewReader(bytes.NewReader(data))
+		reader, err = xz.NewReader(data)
 		if err != nil {
 			return err
 		}
 		filename, _ = strings.CutSuffix(filename, ".xz")
-	case strings.HasSuffix(filename, ".zst"):
+	case strings.HasSuffix(filename, ".zst"), strings.HasSuffix(filename, ".pkt"):
 		var err error
-		reader, err = zstd.NewReader(bytes.NewReader(data))
+		reader, err = zstd.NewReader(data)
 		if err != nil {
 			return err
 		}
 		filename, _ = strings.CutSuffix(filename, ".zst")
 	case strings.HasSuffix(filename, ".bz2"):
-		reader = bzip2.NewReader(bytes.NewReader(data))
+		reader = bzip2.NewReader(data)
 		filename, _ = strings.CutSuffix(filename, ".bz2")
 	case strings.HasSuffix(filename, ".lz4"):
-		reader = lz4.NewReader(bytes.NewReader(data))
+		reader = lz4.NewReader(data)
 		filename, _ = strings.CutSuffix(filename, ".lz4")
 	case strings.HasSuffix(filename, ".zip"):
-		byteReader := bytes.NewReader(data)
-		reader, err := zip.NewReader(byteReader, int64(len(data)))
+		content, err := io.ReadAll(data)
+		if err != nil {
+			return err
+		}
+		reader, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
 		if err != nil {
 			return err
 		}
@@ -93,8 +96,7 @@ func Decompress(data []byte, outputDir, filename string) error {
 		return nil
 	}
 
-	if strings.HasSuffix(filename, ".tar") {
-
+	if strings.HasSuffix(filename, ".tar") || strings.HasSuffix(filename, ".pkt") {
 		tarReader := tar.NewReader(reader)
 
 		for {
@@ -121,7 +123,6 @@ func Decompress(data []byte, outputDir, filename string) error {
 				if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 					return err
 				}
-
 				outFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 				if err != nil {
 					return err

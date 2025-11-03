@@ -1,15 +1,20 @@
 package main
 
 import (
+	"archive/tar"
 	"database/sql"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 
+	"github.com/klauspost/compress/zstd"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/roboogg133/packets/cmd/packets/database"
+	"github.com/roboogg133/packets/cmd/packets/decompress"
 	"github.com/roboogg133/packets/pkg/install"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 	"github.com/spf13/cobra"
@@ -32,8 +37,8 @@ var rootCmd = &cobra.Command{
 
 var executeCmd = &cobra.Command{
 	Use:   "execute {path}",
-	Short: "Installs a package from a given Packet.lua file",
-	Long:  "Installs a package from a given Packet.lua file",
+	Short: "Installs a package from a given .pkt file",
+	Long:  "Installs a package from a given .pkt file",
 	Args:  cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		GrantPrivilegies()
@@ -41,16 +46,20 @@ var executeCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, v := range args {
-			if !strings.HasSuffix(v, ".lua") {
-				fmt.Printf("error: %s need to have .lua suffix\n", v)
+			var pkg packet.PacketLua
+
+			if !strings.HasSuffix(v, ".pkt") {
+				fmt.Printf("error: %s is not a valid Packets packet file\n", v)
 				os.Exit(1)
 			}
-			contentBlob, err := os.ReadFile(v)
+
+			contentBlob, err := os.Open(v)
 			if err != nil {
 				fmt.Printf("error: %s could not be read\n", v)
 				os.Exit(1)
 			}
-			pkg, err := packet.ReadPacket(contentBlob, &packet.Config{BinDir: Config.BinDir})
+			defer contentBlob.Close()
+			pkg, err = packet.ReadPacketFromZSTDF(contentBlob, &packet.Config{BinDir: Config.BinDir})
 			if err != nil {
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
@@ -78,7 +87,33 @@ var executeCmd = &cobra.Command{
 				PacketDir:  packetsdir,
 			}
 
+			db, err := sql.Open("sqlite3", InternalDB)
+			if err != nil {
+				fmt.Printf("error: %s", err.Error())
+				os.Exit(1)
+			}
+			defer db.Close()
+
+			database.PrepareDataBase(db)
+
+			if installed, err := database.SearchIfIsInstalled(pkg.Name, db); err == nil {
+				if installed {
+					fmt.Printf("package %s is already installed", pkg.Name)
+					continue
+				}
+			} else {
+				fmt.Printf("error: %s", err.Error())
+				os.Exit(1)
+			}
+
+			backupDir, err := filepath.Abs(".")
+			_ = ChangeToNoPermission()
 			_ = os.MkdirAll(configs.RootDir, 0755)
+			contentBlob.Seek(0, io.SeekStart)
+			if err := decompress.Decompress(contentBlob, configs.RootDir, filepath.Base(v)); err != nil {
+				fmt.Printf("error: %s", err.Error())
+				os.Exit(1)
+			}
 			_ = os.MkdirAll(configs.SourcesDir, 0755)
 			_ = os.MkdirAll(configs.PacketDir, 0755)
 
@@ -98,13 +133,11 @@ var executeCmd = &cobra.Command{
 					}
 				}
 			}
-			backupDir, err := filepath.Abs(".")
 			if err != nil {
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}
 
-			_ = ChangeToNoPermission()
 			pkg.ExecuteBuild(configs)
 			pkg.ExecuteInstall(configs)
 			_ = ElevatePermission()
@@ -122,14 +155,6 @@ var executeCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			db, err := sql.Open("sqlite3", InternalDB)
-			if err != nil {
-				fmt.Printf("error: %s", err.Error())
-				os.Exit(1)
-			}
-			defer db.Close()
-
-			database.PrepareDataBase(db)
 			if err := database.MarkAsInstalled(pkg, files, configs.PacketDir, pkg.Flags, db, nil, 0); err != nil {
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
@@ -190,8 +215,95 @@ var removeCmd = &cobra.Command{
 	},
 }
 
+var devCmd = &cobra.Command{
+	Use:   "dev",
+	Short: "Develop a package",
+	Long:  "Useful commands for developing packages",
+}
+
+var packCmd = &cobra.Command{
+	Use:   "pack",
+	Short: "Package a directory",
+	Long:  "Package a directory",
+	Run: func(cmd *cobra.Command, args []string) {
+		for _, arg := range args {
+
+			packetDotLuaBlob, err := os.ReadFile(filepath.Join(arg, "Packet.lua"))
+			if err != nil {
+				fmt.Printf("invalid package dir can't find Packet.lua")
+				continue
+			}
+
+			packet, err := packet.ReadPacket(packetDotLuaBlob, nil)
+			if err != nil {
+				fmt.Printf("error: %s\n", err.Error())
+				continue
+			}
+
+			packageFile, err := os.OpenFile(packet.Name+"@"+packet.Version+".pkt", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			if err != nil {
+				fmt.Printf("error: %s\n", err.Error())
+				continue
+			}
+
+			zstdWriter, err := zstd.NewWriter(packageFile)
+			if err != nil {
+				fmt.Printf("error: %s\n", err.Error())
+				continue
+			}
+
+			defer zstdWriter.Close()
+
+			baseDir := filepath.Clean(arg)
+			tarWriter := tar.NewWriter(zstdWriter)
+			defer tarWriter.Close()
+
+			filepath.Walk(arg, func(path string, info fs.FileInfo, err error) error {
+
+				header, err := tar.FileInfoHeader(info, "")
+				if err != nil {
+					return err
+				}
+
+				relPath, err := filepath.Rel(baseDir, path)
+				if err != nil {
+					return err
+				}
+
+				if relPath == "." {
+					return nil
+				}
+
+				header.Name = relPath
+
+				if err := tarWriter.WriteHeader(header); err != nil {
+					return err
+				}
+
+				if !info.IsDir() {
+					file, err := os.Open(path)
+					if err != nil {
+						return err
+					}
+					defer file.Close()
+
+					if _, err := io.Copy(tarWriter, file); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			})
+		}
+	},
+}
+
 func main() {
 	rootCmd.AddCommand(executeCmd)
 	rootCmd.AddCommand(removeCmd)
+	rootCmd.AddCommand(configCmd)
+
+	rootCmd.AddCommand(devCmd)
+	devCmd.AddCommand(packCmd)
 	rootCmd.Execute()
 }

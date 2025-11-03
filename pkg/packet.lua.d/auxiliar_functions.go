@@ -104,10 +104,15 @@ func getSourcesFromTable(table *lua.LTable, key string) *[]Source {
 			case "GET":
 				var getSpecs GETSpecs
 
-				getSpecs.SHA256 = new(string)
+				getSpecs.SHA256 = new([]string)
 				sha256sumL := src.RawGetString("sha256")
-				if sha256sumL.Type() == lua.LTString {
-					*getSpecs.SHA256 = sha256sumL.String()
+				if sha256sumL.Type() == lua.LTTable {
+					shatable := sha256sumL.(*lua.LTable)
+					shatable.ForEach(func(_, value lua.LValue) {
+						if value.Type() == lua.LTString {
+							*getSpecs.SHA256 = append(*getSpecs.SHA256, value.String())
+						}
+					})
 				}
 
 				headersLT := src.RawGetString("headers")
@@ -148,8 +153,13 @@ func getSourcesFromTable(table *lua.LTable, key string) *[]Source {
 				var postSpecs POSTSpecs
 
 				sha256sumL := src.RawGetString("sha256")
-				if sha256sumL.Type() == lua.LTString {
-					*postSpecs.SHA256 = sha256sumL.String()
+				if sha256sumL.Type() == lua.LTTable {
+					shatable := sha256sumL.(*lua.LTable)
+					shatable.ForEach(func(_, value lua.LValue) {
+						if value.Type() == lua.LTString {
+							*postSpecs.SHA256 = append(*postSpecs.SHA256, value.String())
+						}
+					})
 				}
 
 				headersLT := src.RawGetString("headers")

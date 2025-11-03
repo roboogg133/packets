@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"time"
 
 	"github.com/go-git/go-git/v6"
@@ -37,10 +38,9 @@ type PacketLua struct {
 
 	Flags []lua_utils.Flag
 
-	Build     *lua.LFunction
-	Install   *lua.LFunction
-	PreRemove *lua.LFunction
-	LuaState  *lua.LState
+	Build    *lua.LFunction
+	Install  *lua.LFunction
+	LuaState *lua.LState
 }
 
 type Source struct {
@@ -70,13 +70,13 @@ type GitSpecs struct {
 }
 
 type POSTSpecs struct {
-	SHA256  *string
+	SHA256  *[]string
 	Body    *string
 	Headers *map[string]string
 }
 
 type GETSpecs struct {
-	SHA256  *string
+	SHA256  *[]string
 	Headers *map[string]string
 }
 
@@ -142,9 +142,8 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 		GlobalDependencies: getDependenciesFromTable(pkgTable, "build_dependencies"),
 		GlobalSources:      getSourcesFromTable(pkgTable, "sources"),
 
-		Build:     getFunctionFromTable(table, "build"),
-		Install:   getFunctionFromTable(table, "install"),
-		PreRemove: getFunctionFromTable(table, "pre_remove"),
+		Build:   getFunctionFromTable(table, "build"),
+		Install: getFunctionFromTable(table, "install"),
 	}
 
 	packetLua.Flags = append(packetLua.Flags, newFlags.Flags...)
@@ -304,11 +303,10 @@ func GetSource(url, method string, info any, tryAttempts int) (any, error) {
 	return nil, fmt.Errorf("invalid method")
 }
 
-func verifySHA256(checksum string, src []byte) bool {
-
+func verifySHA256(checksum []string, src []byte) bool {
 	check := sha256.Sum256(src)
 
-	return hex.EncodeToString(check[:]) == checksum
+	return slices.Contains(checksum, hex.EncodeToString(check[:]))
 }
 
 func (pkg *PacketLua) ExecuteBuild(cfg *Config) {

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/roboogg133/packets/internal/lua"
 	"github.com/roboogg133/packets/pkg/install"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 )
@@ -19,6 +20,33 @@ func GetPackageId(name string, db *sql.DB) (packet.PackageID, error) {
 
 	err := db.QueryRow("SELECT id FROM installed_packages WHERE name = ?", name).Scan(&id.ID)
 	return id, err
+}
+
+func SearchIfIsInstalled(name string, db *sql.DB) (bool, error) {
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM installed_packages WHERE name = ?)", name).Scan(&exists)
+	return exists, err
+}
+
+func GetAllFromFlag(packageID packet.PackageID, flagType string, db *sql.DB) ([]lua.Flag, error) {
+	var flags []lua.Flag
+
+	rows, err := db.Query("SELECT name, path FROM package_flags WHERE package_id = ? AND flag = ?", packageID.ID, flagType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var flag lua.Flag
+		if err := rows.Scan(&flag.Name, &flag.Path); err != nil {
+			return nil, err
+		}
+		flag.FlagType = flagType
+		flags = append(flags, flag)
+	}
+
+	return flags, nil
 }
 
 func GetPackageFiles(packageID packet.PackageID, db *sql.DB) ([]install.BasicFileStatus, error) {

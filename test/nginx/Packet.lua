@@ -15,7 +15,7 @@ return {
                     {
                         url = "https://nginx.org/download/nginx-1.29.3.zip",
                         method = "GET",
-                        sha256 = "afa2fde9fdf0ac64b91a17dcd34100ac557a3ff8e6154eeb0eeae7aa8e5bbc2d"
+                        sha256 = { "afa2fde9fdf0ac64b91a17dcd34100ac557a3ff8e6154eeb0eeae7aa8e5bbc2d" }
                     }
                 },
                 dependencies = {
@@ -34,7 +34,8 @@ return {
                     {
                         url = "https://nginx.org/download/nginx-1.29.3.tar.gz",
                         method = "GET",
-                        sha256 = "9befcced12ee09c2f4e1385d7e8e21c91f1a5a63b196f78f897c2d044b8c9312"
+                        sha256 = { "9befcced12ee09c2f4e1385d7e8e21c91f1a5a63b196f78f897c2d044b8c9312" }
+
                     }
                 },
                 dependencies = {
@@ -75,8 +76,8 @@ return {
     install = function()
         local uncompressedname = "nginx-1.29.3"
 
+        os.copy("nginx.service", pathjoin(PACKETDIR, "/etc/systemd/system/nginx.service"))
         os.chdir(pathjoin(SOURCESDIR, uncompressedname))
-
 
         os.chmod("objs/nginx", 755)
         os.copy("objs/nginx", pathjoin(PACKETDIR, BIN_DIR, "nginx"))
@@ -118,6 +119,9 @@ return {
         setflags("config", "main", "/etc/nginx/nginx.conf")
         setflags("config", "sites-available", "/etc/nginx/sites-available")
         setflags("config", "sites-enabled", "/etc/nginx/sites-enabled")
+        setflags("man", "nginx.8", "/usr/share/man/man8/nginx.8")
+        setflags("license", "license", "/usr/share/licenses/nginx/LICENSE")
+        setflags("systemd", "nginx.service", "/etc/systemd/system/nginx.service")
     end,
 
 }
