@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS installed_packages(
     upload_time TEXT NOT NULL,
     installed_time INTEGER NOT NULL,
     image BLOB,
+
     UNIQUE(name, version),
     UNIQUE(name, serial)
 );

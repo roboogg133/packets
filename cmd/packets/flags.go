@@ -32,7 +32,11 @@ var configCmd = &cobra.Command{
 
 		id, err := database.GetPackageId(insertedName, db)
 		if err != nil {
-			fmt.Println("Error getting package ID:", err)
+			if err == sql.ErrNoRows {
+				fmt.Printf("package %s not found\n", insertedName)
+			} else {
+				fmt.Println("Error getting package ID:", err)
+			}
 			os.Exit(1)
 		}
 
@@ -40,6 +44,13 @@ var configCmd = &cobra.Command{
 		if err != nil {
 			fmt.Println("Error getting flags:", err)
 			os.Exit(1)
+		}
+
+		if raw, _ := cmd.Flags().GetBool("raw"); raw {
+			for _, flag := range flags {
+				fmt.Printf("%s->%s\n", flag.Name, flag.Path)
+			}
+			return
 		}
 
 		var all []list.Item
@@ -51,25 +62,7 @@ var configCmd = &cobra.Command{
 			}
 			all = append(all, item)
 		}
-		/*
-			delegate1 := list.NewDefaultDelegate()
-			delegate1.Styles.NormalTitle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")).
-				Background(lipgloss.Color("#000000")).
-				Margin(1)
-			delegate1.Styles.NormalDesc = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#000000"))
 
-			delegate1.Styles.SelectedTitle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#0056FF")).
-				Bold(true).
-				Blink(true)
-
-			delegate1.Styles.SelectedDesc = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")).
-				Bold(true).
-				Faint(true)
-		*/
 		m := model{list: list.New(all, list.NewDefaultDelegate(), 0, 0)}
 		m.list.Title = "Configuration files"
 

@@ -298,9 +298,20 @@ var packCmd = &cobra.Command{
 	},
 }
 
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all installed packages",
+	Long:  "List all installed packages",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("odasd")
+
+	},
+}
+
 func main() {
 	rootCmd.AddCommand(executeCmd)
 	rootCmd.AddCommand(removeCmd)
+	configCmd.Flags().Bool("raw", false, "show config names and dir in stdout")
 	rootCmd.AddCommand(configCmd)
 
 	rootCmd.AddCommand(devCmd)
