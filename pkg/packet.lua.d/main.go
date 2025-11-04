@@ -31,6 +31,8 @@ type PacketLua struct {
 	Maintainer  string
 	Description string
 	Serial      int
+	Page        string
+	License     []string
 
 	Plataforms         *map[OperationalSystem]Plataform
 	GlobalSources      *[]Source
@@ -136,6 +138,8 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 		Maintainer:  getStringFromTable(pkgTable, "maintainer"),
 		Description: getStringFromTable(pkgTable, "description"),
 		Serial:      getIntFromTable(pkgTable, "serial"),
+		Page:        getStringFromTable(pkgTable, "pageurl"),
+		License:     getStringArrayFromTable(pkgTable, "LICENSE"),
 
 		Plataforms: getPlataformsFromTable(pkgTable, "plataforms"),
 

@@ -4,7 +4,9 @@ return {
         version = "0.26.0",                                                           -- required
         maintainer = "robogg133",                                                     -- required
         description = "A cat(1) clone with syntax highlighting and Git integration.", -- required
-        serial = 0,                                                                   -- required
+        serial = 0,
+        LICENSE = {"APACHE", "MIT"},
+        pageurl = "https://github.com/sharkdp/bat"
 
         plataforms = {
             windows = {
