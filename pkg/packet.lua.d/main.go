@@ -143,7 +143,7 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 
 		Plataforms: getPlataformsFromTable(pkgTable, "plataforms"),
 
-		GlobalDependencies: getDependenciesFromTable(pkgTable, "build_dependencies"),
+		GlobalDependencies: getDependenciesFromTable(pkgTable, "dependencies"),
 		GlobalSources:      getSourcesFromTable(pkgTable, "sources"),
 
 		Build:   getFunctionFromTable(table, "build"),

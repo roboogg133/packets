@@ -7,6 +7,10 @@ return {
         description =
         [[nginx ("engine x") is an HTTP web server, reverse proxy, content cache, load balancer, TCP/UDP proxy server, and mail proxy server. Originally written by Igor Sysoev and distributed under the 2-clause BSD License. Enterprise distributions, commercial support and training are available from F5, Inc.]],
         serial = 0,
+        pageurl = "https://nginx.org",
+        LICENSE = {
+            "BSD-2-Clause"
+        },
 
         plataforms = {
             windows = {
@@ -17,15 +21,6 @@ return {
                         method = "GET",
                         sha256 = { "afa2fde9fdf0ac64b91a17dcd34100ac557a3ff8e6154eeb0eeae7aa8e5bbc2d" }
                     }
-                },
-                dependencies = {
-                    build = {
-                        "cc",
-                        "cmake",
-                        "make"
-                    },
-                    runtime = {},
-                    conflicts = {}
                 }
             },
             linux = {
@@ -38,19 +33,19 @@ return {
 
                     }
                 },
-                dependencies = {
-                    build = {
-                        "cc",
-                        "cmake",
-                        "make"
-                    },
-                    runtime = {},
-                    conflicts = {}
-                }
             }
         },
 
-        sources = {}
+        sources = {},
+        dependencies = {
+            build = {
+                "cc",
+                "cmake",
+                "make"
+            },
+            runtime = {},
+            conflicts = {}
+        }
 
     },
 
