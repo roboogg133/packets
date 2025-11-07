@@ -8,8 +8,8 @@ import (
 )
 
 func GetPacketsUID() (int, error) {
-	_ = exec.Command("useradd", "-M", "-N", "-r", "-s", "/bin/false", "-d", "/etc/packets", "packets").Run()
-	cmd := exec.Command("id", "-u", "packets")
+	_ = exec.Command("useradd", "-m", "-N", "-r", "-s", "/bin/false", "-d", HomeDir, PacketsUsername).Run()
+	cmd := exec.Command("id", "-u", PacketsUsername)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {

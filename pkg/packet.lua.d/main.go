@@ -34,16 +34,38 @@ type PacketLua struct {
 	Page        string
 	License     []string
 
-	Plataforms         *map[OperationalSystem]Plataform
-	GlobalSources      *[]Source
-	GlobalDependencies *PkgDependencies
+	Plataforms         map[OperationalSystem]Plataform
+	GlobalSources      []Source
+	GlobalDependencies PkgDependencies
 
-	Flags []lua_utils.Flag
+	Flags []Flag
 
-	Build    *lua.LFunction
-	Install  *lua.LFunction
+	Build *lua.LFunction
+
+	Install             *lua.LFunction
+	InstallInstructions []InstallInstruction
+
 	LuaState *lua.LState
 }
+
+type allInstallInstructions []InstallInstruction
+
+type InstallInstruction struct {
+	IsDir       bool
+	Source      string
+	Destination string
+	FileMode    os.FileMode
+}
+
+type flags []Flag
+
+type Flag struct {
+	Name     string
+	Path     string
+	FlagType string
+}
+
+//
 
 type Source struct {
 	Method string
@@ -54,16 +76,16 @@ type Source struct {
 type VersionConstraint string
 
 type PkgDependencies struct {
-	RuntimeDependencies *map[string]*VersionConstraint
-	BuildDependencies   *map[string]*VersionConstraint
-	Conflicts           *map[string]*VersionConstraint
+	RuntimeDependencies map[string]VersionConstraint
+	BuildDependencies   map[string]VersionConstraint
+	Conflicts           map[string]VersionConstraint
 }
 
 type Plataform struct {
 	Name         string
 	Architetures []string
-	Sources      *[]Source
-	Dependencies *PkgDependencies
+	Sources      []Source
+	Dependencies PkgDependencies
 }
 
 type GitSpecs struct {
@@ -107,8 +129,12 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 	L.SetGlobal("CURRENT_ARCH_NORMALIZED", lua.LString(normalizeArch(runtime.GOARCH)))
 	L.SetGlobal("CURRENT_PLATAFORM", lua.LString(runtime.GOOS))
 
-	var newFlags lua_utils.Flags
+	L.SetGlobal("SOURCESDIR", lua.LString(cfg.SourcesDir))
+
+	var newFlags flags
+	var newInstructions allInstallInstructions
 	L.SetGlobal("setflags", L.NewFunction(newFlags.LSetFlag))
+	L.SetGlobal("install", L.NewFunction(newInstructions.LInstall))
 	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
 
 	if err := L.DoString(string(f)); err != nil {
@@ -149,8 +175,8 @@ func ReadPacket(f []byte, cfg *Config) (PacketLua, error) {
 		Build:   getFunctionFromTable(table, "build"),
 		Install: getFunctionFromTable(table, "install"),
 	}
-
-	packetLua.Flags = append(packetLua.Flags, newFlags.Flags...)
+	packetLua.InstallInstructions = append(packetLua.InstallInstructions, newInstructions...)
+	packetLua.Flags = append(packetLua.Flags, newFlags...)
 
 	packetLua.LuaState = L
 	if packetLua.Install == nil {
@@ -334,11 +360,12 @@ func (pkg *PacketLua) ExecuteBuild(cfg *Config) {
 	L.SetGlobal("CURRENT_PLATAFORM", lua.LString(runtime.GOOS))
 
 	L.SetGlobal("SOURCESDIR", lua.LString(cfg.SourcesDir))
-	L.SetGlobal("PACKETDIR", lua.LString(cfg.PacketDir))
 
-	var newFlags lua_utils.Flags
+	var newFlags flags
+	var newInstructions allInstallInstructions
 	L.SetGlobal("setflags", L.NewFunction(newFlags.LSetFlag))
 	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
+	L.SetGlobal("install", L.NewFunction(newInstructions.LInstall))
 
 	os.Chdir(cfg.RootDir)
 
@@ -347,7 +374,8 @@ func (pkg *PacketLua) ExecuteBuild(cfg *Config) {
 	L.Push(pkg.Build)
 	L.Call(0, 0)
 
-	pkg.Flags = append(pkg.Flags, newFlags.Flags...)
+	pkg.InstallInstructions = append(pkg.InstallInstructions, newInstructions...)
+	pkg.Flags = append(pkg.Flags, newFlags...)
 }
 
 func (pkg *PacketLua) ExecuteInstall(cfg *Config) {
@@ -372,11 +400,12 @@ func (pkg *PacketLua) ExecuteInstall(cfg *Config) {
 	L.SetGlobal("CURRENT_PLATAFORM", lua.LString(runtime.GOOS))
 
 	L.SetGlobal("SOURCESDIR", lua.LString(cfg.SourcesDir))
-	L.SetGlobal("PACKETDIR", lua.LString(cfg.PacketDir))
 
-	var newFlags lua_utils.Flags
+	var newFlags flags
+	var newInstructions allInstallInstructions
 	L.SetGlobal("setflags", L.NewFunction(newFlags.LSetFlag))
 	L.SetGlobal("pathjoin", L.NewFunction(lua_utils.Ljoin))
+	L.SetGlobal("install", L.NewFunction(newInstructions.LInstall))
 
 	os.Chdir(cfg.RootDir)
 
@@ -385,6 +414,7 @@ func (pkg *PacketLua) ExecuteInstall(cfg *Config) {
 	L.Push(pkg.Install)
 	L.Call(0, 0)
 
-	pkg.Flags = append(pkg.Flags, newFlags.Flags...)
+	pkg.InstallInstructions = append(pkg.InstallInstructions, newInstructions...)
+	pkg.Flags = append(pkg.Flags, newFlags...)
 
 }

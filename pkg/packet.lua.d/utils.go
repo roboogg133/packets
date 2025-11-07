@@ -37,8 +37,8 @@ func (pkg PacketLua) IsValid() bool {
 
 	var a, b int
 
-	for _, v := range *pkg.Plataforms {
-		for _, src := range *v.Sources {
+	for _, v := range pkg.Plataforms {
+		for _, src := range v.Sources {
 			a++
 			if src.Method == "git" {
 				if src.Specs.(GitSpecs).Branch == "" && src.Specs.(GitSpecs).Tag == nil {
@@ -49,9 +49,9 @@ func (pkg PacketLua) IsValid() bool {
 		b += len(v.Architetures)
 	}
 
-	a += len(*pkg.GlobalSources)
+	a += len(pkg.GlobalSources)
 
-	if a < 1 || len(*pkg.Plataforms) > b {
+	if a < 1 || len(pkg.Plataforms) > b {
 		return false
 	}
 

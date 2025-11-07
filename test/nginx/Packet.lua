@@ -37,7 +37,7 @@ return {
         },
 
         sources = {},
-        dependencies = {
+        build_dependencies = {
             build = {
                 "cc",
                 "cmake",
@@ -71,44 +71,47 @@ return {
     install = function()
         local uncompressedname = "nginx-1.29.3"
 
-        os.copy("nginx.service", pathjoin(PACKETDIR, "/etc/systemd/system/nginx.service"))
+        install("nginx.service", "/etc/systemd/system/nginx.service")
         os.chdir(pathjoin(SOURCESDIR, uncompressedname))
 
         os.chmod("objs/nginx", 755)
-        os.copy("objs/nginx", pathjoin(PACKETDIR, BIN_DIR, "nginx"))
-        os.mkdir(pathjoin(PACKETDIR, "/usr/local/nginx"), 755)
-        os.mkdir(pathjoin(PACKETDIR, "/etc/nginx"), 755)
+        install("objs/nginx", pathjoin(BIN_DIR, "nginx"))
 
-        os.copy("conf/koi-win", pathjoin(PACKETDIR, "/etc/nginx/koi-win"))
-        os.copy("conf/koi-utf", pathjoin(PACKETDIR, "/etc/nginx/koi-utf"))
-        os.copy("conf/win-utf", pathjoin(PACKETDIR, "/etc/nginx/win-utf"))
+        os.mkdir("nginx", 755)
+        install("nginx", "/usr/local/nginx")
+        install("nginx", "/etc/nginx")
 
-        os.copy("conf/mime.types", pathjoin(PACKETDIR, "/etc/nginx/mime.types"))
-        os.copy("conf/mime.types", pathjoin(PACKETDIR, "/etc/nginx/mime.types.default"))
+        install("conf/koi-win", "/etc/nginx/koi-win")
+        install("conf/koi-utf", "/etc/nginx/koi-utf")
+        install("conf/win-utf", "/etc/nginx/win-utf")
 
-        os.copy("conf/fastcgi_params", pathjoin(PACKETDIR, "/etc/nginx/fastcgi_params"))
-        os.copy("conf/fastcgi_params", pathjoin(PACKETDIR, "/etc/nginx/fastcgi_params.default"))
+        install("conf/mime.types", "/etc/nginx/mime.types")
+        install("conf/mime.types", "/etc/nginx/mime.types.default")
 
-        os.copy("conf/fastcgi.conf", pathjoin(PACKETDIR, "/etc/nginx/fastcgi.conf"))
-        os.copy("conf/fastcgi.conf", pathjoin(PACKETDIR, "/etc/nginx/fastcgi.conf.default"))
+        install("conf/fastcgi_params", "/etc/nginx/fastcgi_params")
+        install("conf/fastcgi_params", "/etc/nginx/fastcgi_params.default")
 
-        os.copy("conf/uwsgi_params", pathjoin(PACKETDIR, "/etc/nginx/uwsgi_params"))
-        os.copy("conf/uwsgi_params", pathjoin(PACKETDIR, "/etc/nginx/uwsgi_params.default"))
+        install("conf/fastcgi.conf", "/etc/nginx/fastcgi.conf")
+        install("conf/fastcgi.conf", "/etc/nginx/fastcgi.conf.default")
+
+        install("conf/uwsgi_params", "/etc/nginx/uwsgi_params")
+        install("conf/uwsgi_params", "/etc/nginx/uwsgi_params.default")
 
 
-        os.copy("conf/scgi_params", pathjoin(PACKETDIR, "/etc/nginx/scgi_params"))
-        os.copy("conf/scgi_params", pathjoin(PACKETDIR, "/etc/nginx/scgi_params.default"))
+        install("conf/scgi_params", "/etc/nginx/scgi_params")
+        install("conf/scgi_params", "/etc/nginx/scgi_params.default")
 
-        os.copy("conf/nginx.conf", pathjoin(PACKETDIR, "/etc/nginx/nginx.conf"))
-        os.copy("conf/nginx.conf", pathjoin(PACKETDIR, "/etc/nginx/nginx.conf.default"))
+        install("conf/nginx.conf", "/etc/nginx/nginx.conf")
+        install("conf/nginx.conf", "/etc/nginx/nginx.conf.default")
 
-        os.copy("html", pathjoin(PACKETDIR, "/usr/share/nginx/html"))
+        install("html", "/usr/share/nginx/html")
 
-        os.copy("LICENSE", pathjoin(PACKETDIR, "/usr/share/licenses/nginx/LICENSE"))
+        install("LICENSE", "/usr/share/licenses/nginx/LICENSE")
 
-        os.copy("man/nginx.8", pathjoin(PACKETDIR, "/usr/share/man/man8/nginx.8"))
+        install("man/nginx.8", "/usr/share/man/man8/nginx.8")
 
-        os.mkdir(pathjoin(PACKETDIR, "/etc/nginx/logs"), 755)
+        os.mkdir("logs", 755)
+        install("logs", "/etc/nginx/logs")
 
         setflags("bin", "nginx", pathjoin(BIN_DIR, "nginx"))
         setflags("config", "main", "/etc/nginx/nginx.conf")

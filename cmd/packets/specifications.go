@@ -3,6 +3,7 @@ package main
 const (
 	ConfigurationDir       = "/etc/packets"
 	InternalDB             = ConfigurationDir + "/internal.db"
+	PacketsUsername        = "packets"
 	HomeDir                = "/var/lib/packets"
 	PackageRootDir         = "/var/lib/packets/packages"
 	NumberOfTryAttempts    = 4

@@ -3,12 +3,9 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/roboogg133/packets/internal/lua"
-	"github.com/roboogg133/packets/pkg/install"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 )
 
@@ -25,6 +22,8 @@ CREATE TABLE IF NOT EXISTS installed_packages(
     upload_time TEXT NOT NULL,
     installed_time INTEGER NOT NULL,
     image BLOB,
+
+    available_compiled INTEGER NOT NULL DEFAULT 0,
 
     UNIQUE(name, version),
     UNIQUE(name, serial)
@@ -71,7 +70,7 @@ type DatabaseOptions struct {
 	// Add any additional options here
 }
 
-func MarkAsInstalled(pkg packet.PacketLua, files []install.BasicFileStatus, PACKETDIR string, flags []lua.Flag, db *sql.DB, image []byte, upload_time int64) error {
+func MarkAsInstalled(pkg packet.PacketLua, files []packet.InstallInstruction, flags []packet.Flag, db *sql.DB, image []byte, upload_time int64) error {
 
 	switch {
 	case upload_time == 0:
@@ -87,8 +86,7 @@ func MarkAsInstalled(pkg packet.PacketLua, files []install.BasicFileStatus, PACK
 	}
 
 	for _, v := range files {
-		v.Filepath, _ = strings.CutPrefix(v.Filepath, PACKETDIR)
-		_, err = db.Exec("INSERT INTO package_files (package_id, path, is_dir) VALUES (?, ?, ?)", pkg.Name+"@"+pkg.Version, v.Filepath, v.IsDir)
+		_, err = db.Exec("INSERT INTO package_files (package_id, path, is_dir) VALUES (?, ?, ?)", pkg.Name+"@"+pkg.Version, v.Destination, v.IsDir)
 		if err != nil {
 			db.Exec("DELETE FROM installed_packages WHERE id = ?", pkg.Name+"@"+pkg.Version)
 			db.Exec("DELETE FROM package_files WHERE package_id = ?", pkg.Name+"@"+pkg.Version)

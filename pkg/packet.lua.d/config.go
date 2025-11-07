@@ -1,10 +1,7 @@
 package packet
 
-import "path/filepath"
-
 type Config struct {
 	BinDir     string
-	PacketDir  string
 	SourcesDir string
 	RootDir    string
 }
@@ -24,9 +21,6 @@ func checkConfig(cfg *Config) *Config {
 		return &Config{
 			BinDir: defaultBinDir,
 		}
-	case cfg.PacketDir == "":
-
-		cfg.PacketDir = filepath.Join("/tmp", randStringBytes(12))
 	}
 
 	return cfg

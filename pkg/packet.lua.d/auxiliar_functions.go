@@ -55,10 +55,10 @@ type version struct {
 	Constraint VersionConstraint
 }
 
-func getDependenciesFromTable(table *lua.LTable, key string) *PkgDependencies {
+func getDependenciesFromTable(table *lua.LTable, key string) PkgDependencies {
 	value := table.RawGetString(key)
 	if value.Type() != lua.LTTable {
-		return &PkgDependencies{}
+		return PkgDependencies{}
 	}
 
 	var pkgDeps PkgDependencies
@@ -69,10 +69,10 @@ func getDependenciesFromTable(table *lua.LTable, key string) *PkgDependencies {
 	pkgDeps.BuildDependencies = depsParse(depnTable, "build")
 	pkgDeps.Conflicts = depsParse(depnTable, "conflicts")
 
-	return &pkgDeps
+	return pkgDeps
 }
 
-func getSourcesFromTable(table *lua.LTable, key string) *[]Source {
+func getSourcesFromTable(table *lua.LTable, key string) []Source {
 	value := table.RawGetString(key)
 	if value.Type() != lua.LTTable {
 		return nil
@@ -190,10 +190,10 @@ func getSourcesFromTable(table *lua.LTable, key string) *[]Source {
 		}
 	})
 
-	return &srcList
+	return srcList
 }
 
-func getPlataformsFromTable(table *lua.LTable, key string) *map[OperationalSystem]Plataform {
+func getPlataformsFromTable(table *lua.LTable, key string) map[OperationalSystem]Plataform {
 	value := table.RawGetString(key)
 
 	if value.Type() != lua.LTTable {
@@ -222,28 +222,28 @@ func getPlataformsFromTable(table *lua.LTable, key string) *map[OperationalSyste
 		return nil
 	}
 
-	return &tmpMap
+	return tmpMap
 }
 
-func depsParse(depnTable *lua.LTable, key string) *map[string]*VersionConstraint {
+func depsParse(depnTable *lua.LTable, key string) map[string]VersionConstraint {
 	if runLTable := depnTable.RawGetString(key); runLTable.Type() == lua.LTTable {
 		runtimeTable := runLTable.(*lua.LTable)
 
-		mapTemp := make(map[string]*VersionConstraint)
+		mapTemp := make(map[string]VersionConstraint)
 
 		var found bool
 
 		runtimeTable.ForEach(func(_, value lua.LValue) {
 			if value.Type() == lua.LTString {
 				version := parseVersionString(value.String())
-				mapTemp[version.Name] = &version.Constraint
+				mapTemp[version.Name] = version.Constraint
 				found = true
 			}
 		})
 		if !found {
 			return nil
 		} else {
-			return &mapTemp
+			return mapTemp
 		}
 
 	}

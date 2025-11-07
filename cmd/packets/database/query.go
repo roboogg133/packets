@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/roboogg133/packets/internal/lua"
 	"github.com/roboogg133/packets/pkg/install"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 )
@@ -28,8 +27,8 @@ func SearchIfIsInstalled(name string, db *sql.DB) (bool, error) {
 	return exists, err
 }
 
-func GetAllFromFlag(packageID packet.PackageID, flagType string, db *sql.DB) ([]lua.Flag, error) {
-	var flags []lua.Flag
+func GetAllFromFlag(packageID packet.PackageID, flagType string, db *sql.DB) ([]packet.Flag, error) {
+	var flags []packet.Flag
 
 	rows, err := db.Query("SELECT name, path FROM package_flags WHERE package_id = ? AND flag = ?", packageID.ID, flagType)
 	if err != nil {
@@ -38,7 +37,7 @@ func GetAllFromFlag(packageID packet.PackageID, flagType string, db *sql.DB) ([]
 	defer rows.Close()
 
 	for rows.Next() {
-		var flag lua.Flag
+		var flag packet.Flag
 		if err := rows.Scan(&flag.Name, &flag.Path); err != nil {
 			return nil, err
 		}

@@ -54,12 +54,9 @@ return {
     install = function()
         os.chdir(pathjoin(SOURCESDIR, "bat-v0.26.0-" .. CURRENT_ARCH_NORMALIZED .. "-unknown-linux-gnu"))
         os.chmod("bat", 755)
-        local suc, errmsg = os.copy("bat", pathjoin(PACKETDIR, BIN_DIR, "bat"))
-        if not suc then
-            error("failed to copy bat: " .. errmsg)
-        end
 
-        os.copy("bat.1", pathjoin(PACKETDIR, "/usr/share/man/man1/bat.1"))
+        install("bat", pathjoin(BIN_DIR, "bat"))
+        install("bat.1", pathjoin("/usr/share/man/man1/bat.1"))
 
         setflags("man", "manual", "/usr/share/man/man1/bat.1")
     end,

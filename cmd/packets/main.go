@@ -15,7 +15,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/roboogg133/packets/cmd/packets/database"
 	"github.com/roboogg133/packets/cmd/packets/decompress"
-	"github.com/roboogg133/packets/pkg/install"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 	"github.com/spf13/cobra"
 )
@@ -75,16 +74,10 @@ var executeCmd = &cobra.Command{
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}
-			packetsdir, err := filepath.Abs(filepath.Join(rootdir, "packet"))
-			if err != nil {
-				fmt.Printf("error: %s", err.Error())
-				os.Exit(1)
-			}
 			configs := &packet.Config{
 				BinDir:     Config.BinDir,
 				RootDir:    rootdir,
 				SourcesDir: sourcesdir,
-				PacketDir:  packetsdir,
 			}
 
 			db, err := sql.Open("sqlite3", InternalDB)
@@ -115,19 +108,15 @@ var executeCmd = &cobra.Command{
 				os.Exit(1)
 			}
 			_ = os.MkdirAll(configs.SourcesDir, 0755)
-			_ = os.MkdirAll(configs.PacketDir, 0755)
 
-			if err := DownloadSource(pkg.GlobalSources, configs); err != nil {
+			if err := DownloadSource(&pkg.GlobalSources, configs); err != nil {
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}
 
 			if pkg.Plataforms != nil {
-
-				temp := *pkg.Plataforms
-
-				if plataform, exists := temp[packet.OperationalSystem(runtime.GOOS)]; exists {
-					if err := DownloadSource(plataform.Sources, configs); err != nil {
+				if plataform, exists := pkg.Plataforms[packet.OperationalSystem(runtime.GOOS)]; exists {
+					if err := DownloadSource(&plataform.Sources, configs); err != nil {
 						fmt.Printf("error: %s", err.Error())
 						os.Exit(1)
 					}
@@ -144,18 +133,16 @@ var executeCmd = &cobra.Command{
 
 			os.Chdir(backupDir)
 
-			files, err := install.GetPackageFiles(configs.PacketDir)
-			if err != nil {
+			if err := InstallFiles(pkg.InstallInstructions); err != nil {
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}
 
-			if err := install.InstallFiles(files, configs.PacketDir); err != nil {
-				fmt.Printf("error: %s", err.Error())
-				os.Exit(1)
+			for _, instruction := range pkg.InstallInstructions {
+				fmt.Printf("(%s) -> (%s) IsDir? %t\n", instruction.Source, instruction.Destination, instruction.IsDir)
 			}
 
-			if err := database.MarkAsInstalled(pkg, files, configs.PacketDir, pkg.Flags, db, nil, 0); err != nil {
+			if err := database.MarkAsInstalled(pkg, pkg.InstallInstructions, pkg.Flags, db, nil, 0); err != nil {
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}

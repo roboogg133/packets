@@ -1,15 +1,29 @@
-package install
+package main
 
 import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/roboogg133/packets/pkg/packet.lua.d"
 )
 
-type BasicFileStatus struct {
-	Filepath string
-	PermMode os.FileMode
-	IsDir    bool
+func InstallFiles(instructions []packet.InstallInstruction) error {
+
+	for _, v := range instructions {
+
+		if v.IsDir {
+			if err := os.MkdirAll(v.Destination, v.FileMode); err != nil {
+				return err
+			}
+		} else {
+			if err := copyFile(v.Source, v.Destination); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func copyFile(source string, destination string) error {
