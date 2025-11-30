@@ -1,4 +1,3 @@
--- https://nginx.org/download/nginx-1.29.3.tar.gz
 return {
     package = {
         name = "nginx",
@@ -14,7 +13,7 @@ return {
 
         plataforms = {
             windows = {
-                arch = { "amd64" },
+                arch = { "amd64", "386" },
                 sources = {
                     {
                         url = "https://nginx.org/download/nginx-1.29.3.zip",
@@ -24,7 +23,7 @@ return {
                 }
             },
             linux = {
-                arch = { "amd64" },
+                arch = { "amd64", "386", "arm64" },
                 sources = {
                     {
                         url = "https://nginx.org/download/nginx-1.29.3.tar.gz",
@@ -37,9 +36,9 @@ return {
         },
 
         sources = {},
-        build_dependencies = {
+        dependencies = {
             build = {
-                "cc",
+                "gcc",
                 "cmake",
                 "make"
             },
