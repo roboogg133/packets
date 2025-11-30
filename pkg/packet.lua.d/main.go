@@ -335,7 +335,9 @@ func GetSource(url, method string, info any, tryAttempts int) (any, error) {
 
 func verifySHA256(checksum []string, src []byte) bool {
 	check := sha256.Sum256(src)
-
+	if len(checksum) == 0 {
+		return true
+	}
 	return slices.Contains(checksum, hex.EncodeToString(check[:]))
 }
 
