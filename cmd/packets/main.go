@@ -19,6 +19,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var verbosityLevel string
+
 func GrantPrivilegies() {
 	if os.Geteuid() != 0 {
 		fmt.Println("error: this operation must be run as root")
@@ -91,7 +93,7 @@ var executeCmd = &cobra.Command{
 
 			if installed, err := database.SearchIfIsInstalled(pkg.Name, db); err == nil {
 				if installed {
-					fmt.Printf("package %s is already installed", pkg.Name)
+					fmt.Printf("=> package %s is already installed\n", pkg.Name)
 					continue
 				}
 			} else {
@@ -193,7 +195,7 @@ var removeCmd = &cobra.Command{
 				}
 			}
 
-			if err := database.MarkAsUninstalled(id.ID, db); err != nil {
+			if err := database.MarkAsUninstalled(id, db); err != nil {
 				fmt.Printf("error removing package from database but successfully removed it from the system: %s\n", err.Error())
 				continue
 			}
@@ -296,10 +298,14 @@ var listCmd = &cobra.Command{
 }
 
 func main() {
+
+	verbosityLevel = os.Getenv("VERBOSE_LEVEL")
+
 	rootCmd.AddCommand(executeCmd)
 	rootCmd.AddCommand(removeCmd)
 	configCmd.Flags().Bool("raw", false, "show config names and dir in stdout")
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(flagCmd)
 
 	rootCmd.AddCommand(devCmd)
 	devCmd.AddCommand(packCmd)
