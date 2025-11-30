@@ -79,7 +79,7 @@ func MarkAsInstalled(pkg packet.PacketLua, files []packet.InstallInstruction, fl
 		image = []byte{1}
 	}
 
-	_, err := db.Exec("INSERT INTO installed_packages (name, id, version, installed_time, image, serial, maintainer, description, upload_time) VALUES (?, ?, ?, ?, ?, ?,?,?,?)", pkg.Name, pkg.Name+"@"+pkg.Version, pkg.Version, time.Now().UnixMilli(), image, pkg.Serial, pkg.Maintainer, pkg.Description, time.Now().UnixMilli())
+	_, err := db.Exec("INSERT INTO installed_packages (name, id, version, installed_time, image, serial, maintainer, description, upload_time) VALUES (?, ?, ?, ?, ?, ?,?,?,?)", pkg.Name, pkg.Name+"@"+pkg.Version, pkg.Version, time.Now().Unix(), image, pkg.Serial, pkg.Maintainer, pkg.Description, time.Now().Unix())
 	if err != nil {
 		db.Exec("DELETE FROM installed_packages WHERE id = ?", pkg.Name+"@"+pkg.Version)
 		return err
@@ -108,16 +108,16 @@ func MarkAsInstalled(pkg packet.PacketLua, files []packet.InstallInstruction, fl
 	return nil
 }
 
-func MarkAsUninstalled(id string, db *sql.DB) error {
-	if _, err := db.Exec("DELETE FROM installed_packages WHERE id = ?", id); err != nil {
+func MarkAsUninstalled(id packet.PackageID, db *sql.DB) error {
+	if _, err := db.Exec("DELETE FROM installed_packages WHERE id = ?", string(id)); err != nil {
 		return err
 	}
 
-	if _, err := db.Exec("DELETE FROM package_files WHERE package_id = ?", id); err != nil {
+	if _, err := db.Exec("DELETE FROM package_files WHERE package_id = ?", string(id)); err != nil {
 		return err
 	}
 
-	if _, err := db.Exec("DELETE FROM package_flags WHERE package_id = ?", id); err != nil {
+	if _, err := db.Exec("DELETE FROM package_flags WHERE package_id = ?", string(id)); err != nil {
 		return err
 	}
 	return nil

@@ -13,12 +13,13 @@ func GetPackageId(name string, db *sql.DB) (packet.PackageID, error) {
 	var id packet.PackageID
 
 	if strings.Contains(name, "@") {
-		id.ID = strings.SplitAfter(name, "@")[0]
+		id = packet.PackageID(strings.SplitAfter(name, "@")[0])
 		return id, nil
 	}
 
-	err := db.QueryRow("SELECT id FROM installed_packages WHERE name = ?", name).Scan(&id.ID)
-	return id, err
+	var s string
+	err := db.QueryRow("SELECT id FROM installed_packages WHERE name = ?", name).Scan(&s)
+	return packet.NewId(s), err
 }
 
 func SearchIfIsInstalled(name string, db *sql.DB) (bool, error) {
@@ -30,7 +31,7 @@ func SearchIfIsInstalled(name string, db *sql.DB) (bool, error) {
 func GetAllFromFlag(packageID packet.PackageID, flagType string, db *sql.DB) ([]packet.Flag, error) {
 	var flags []packet.Flag
 
-	rows, err := db.Query("SELECT name, path FROM package_flags WHERE package_id = ? AND flag = ?", packageID.ID, flagType)
+	rows, err := db.Query("SELECT name, path FROM package_flags WHERE package_id = ? AND flag = ?", string(packageID), flagType)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +51,7 @@ func GetAllFromFlag(packageID packet.PackageID, flagType string, db *sql.DB) ([]
 
 func GetPackageFiles(packageID packet.PackageID, db *sql.DB) ([]install.BasicFileStatus, error) {
 	var files []install.BasicFileStatus
-	rows, err := db.Query("SELECT path, is_dir FROM package_files WHERE package_id = ?", packageID.ID)
+	rows, err := db.Query("SELECT path, is_dir FROM package_files WHERE package_id = ?", string(packageID))
 	if err != nil {
 		return nil, err
 	}

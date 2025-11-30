@@ -15,21 +15,19 @@ func randStringBytes(n int) string {
 	return string(b)
 }
 
-type PackageID struct {
-	ID string
-}
+type PackageID string
 
 func (id PackageID) Name() string {
-	return strings.SplitAfter(id.ID, "@")[0]
+	return strings.Split(string(id), "@")[0]
 }
 
 func (id PackageID) Version() string {
-	return strings.SplitAfter(id.ID, "@")[1]
+	return strings.Split(string(id), "@")[1]
 }
 
 func NewId(id string) PackageID {
 	var ID PackageID
-	ID.ID = id
+	ID = PackageID(id)
 	return ID
 }
 
