@@ -1,55 +1,11 @@
 package install
 
 import (
-	"io"
 	"os"
-	"path/filepath"
 )
 
 type BasicFileStatus struct {
 	Filepath string
 	PermMode os.FileMode
 	IsDir    bool
-}
-
-func copyFile(source string, destination string) error {
-	src, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	status, err := src.Stat()
-	if err != nil {
-		return err
-	}
-
-	err = os.MkdirAll(filepath.Dir(destination), 0755)
-	if err != nil {
-		return err
-	}
-
-	dst, err := os.Create(destination)
-	if err != nil {
-		if !os.IsExist(err) {
-			dst, err = os.Open(destination)
-			if err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-
-	defer dst.Close()
-	if err := dst.Chmod(status.Mode()); err != nil {
-		return err
-	}
-
-	_, err = io.Copy(dst, src)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

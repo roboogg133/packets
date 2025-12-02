@@ -287,11 +287,10 @@ func parseVersionString(s string) version {
 				Constraint: VersionConstraint("<" + slice[1]),
 			}
 		}
-
 	} else if !strings.ContainsAny(s, "@=<>") {
 		return version{
 			Name:       s,
-			Constraint: VersionConstraint(0x000),
+			Constraint: VersionConstraint(rune(0x000)),
 		}
 	}
 
