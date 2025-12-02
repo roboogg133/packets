@@ -1,20 +1,18 @@
 CREATE TABLE installed_packges(
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     id TEXT PRIMARY KEY,
     version TEXT NOT NULL,
     serial INTEGER NOT NULL,
     maintainer TEXT NOT NULL,
     verified INTEGER NOT NULL DEFAULT 0,
     description TEXT NOT NULL,
-    upload_time TEXT NOT NULL,
-    installed_time TEXT NOT NULL,
+    upload_time INTEGER NOT NULL,
+    installed_time INTEGER NOT NULL,
 
-    public_key BLOB NOT NULL,
-    signature BLOB NOT NULL,
+    location TEXT NOT NULL,
 
     image BLOB,
 
-    UNIQUE(name, signature),
     UNIQUE(name, version),
     UNIQUE(name, serial)
 )
@@ -58,4 +56,24 @@ CREATE TABLE package_flags(
     flag TEXT NOT NULL,
     name TEXT NOT NULL,
     path TEXT NOT NULL,
+)
+
+CREATE TABLE build_packages(
+    name TEXT NOT NULL,
+    id TEXT PRIMARY KEY,
+    version TEXT NOT NULL,
+    serial INTEGER NOT NULL,
+    maintainer TEXT NOT NULL,
+    verified INTEGER NOT NULL DEFAULT 0,
+    description TEXT NOT NULL,
+    upload_time INTEGER NOT NULL,
+    installed_time INTEGER NOT NULL,
+
+    location TEXT NOT NULL,
+
+    filepath TEXT NOT NULL,
+
+    UNIQUE(name, signature),
+    UNIQUE(name, version),
+    UNIQUE(name, serial)
 )
