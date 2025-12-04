@@ -60,7 +60,7 @@ var configCmd = &cobra.Command{
 		for _, flag := range flags {
 			flag.Path = strings.ReplaceAll(flag.Path, UserHomeDirPlaceholder, usrhomeDir)
 			flag.Path = strings.ReplaceAll(flag.Path, UsernamePlaceholder, os.Getenv("USER"))
-			fmt.Printf("[ %s ]\n └ %s\n\n", flag.Name, flag.Path)
+			fmt.Printf("\033[1m[ %s ]\033[0m\n - \033[2m%s\033[0m\n\n", flag.Name, flag.Path)
 		}
 
 	},
@@ -99,7 +99,7 @@ var flagCmd = &cobra.Command{
 		}
 
 		if len(flags) == 0 {
-			fmt.Println("0 configuration flags set")
+			fmt.Printf("0 %s flags set\n", args[0])
 			os.Exit(0)
 		}
 
@@ -116,7 +116,7 @@ var flagCmd = &cobra.Command{
 		for _, flag := range flags {
 			flag.Path = strings.ReplaceAll(flag.Path, UserHomeDirPlaceholder, usrhomeDir)
 			flag.Path = strings.ReplaceAll(flag.Path, UsernamePlaceholder, os.Getenv("USER"))
-			fmt.Printf("[ %s ]\n └ %s\n\n", flag.Name, flag.Path)
+			fmt.Printf("\033[1m[ %s ]\033[0m\n - \033[2m%s\033[0m\n\n", flag.Name, flag.Path)
 		}
 
 	},
