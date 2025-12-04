@@ -2,19 +2,27 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"database/sql"
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/roboogg133/packets/cmd/packets/database"
 	"github.com/roboogg133/packets/cmd/packets/decompress"
+	"github.com/roboogg133/packets/cmd/packets/lockfile"
+	"github.com/roboogg133/packets/cmd/packets/repo"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 	"github.com/spf13/cobra"
 )
@@ -111,14 +119,14 @@ var executeCmd = &cobra.Command{
 			}
 			_ = os.MkdirAll(configs.SourcesDir, 0755)
 
-			if err := DownloadSource(&pkg.GlobalSources, configs); err != nil {
+			if err := DownloadSource(&pkg.GlobalSources, configs, nil); err != nil {
 				fmt.Printf("error: %s", err.Error())
 				os.Exit(1)
 			}
 
 			if pkg.Plataforms != nil {
 				if plataform, exists := pkg.Plataforms[packet.OperationalSystem(runtime.GOOS)]; exists {
-					if err := DownloadSource(&plataform.Sources, configs); err != nil {
+					if err := DownloadSource(&plataform.Sources, configs, nil); err != nil {
 						fmt.Printf("error: %s", err.Error())
 						os.Exit(1)
 					}
@@ -292,8 +300,256 @@ var listCmd = &cobra.Command{
 	Short: "List all installed packages",
 	Long:  "List all installed packages",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("odasd")
+		db, err := sql.Open("sqlite3", InternalDB)
+		if err != nil {
+			panic(err)
+		}
+		database.PrepareDataBase(db)
 
+		pkgs, err := database.ListAllInstalledPackages(db)
+		if err != nil {
+			panic(err)
+		}
+
+		for _, pkg := range pkgs {
+			fmt.Printf("\033[1m==> %s\033[0m\n", pkg.Name)
+			fmt.Printf("  \033[1mPackage ID:\033[0m %s\n", pkg.Id)
+			fmt.Printf("  \033[1mMaintainer:\033[0m %s\n", pkg.Maintainer)
+			fmt.Printf("  \033[1mVerified:\033[0m %v\n", pkg.Verified)
+			fmt.Printf("  \033[1mDescription:\033[0m %s\n", pkg.Description)
+			fmt.Printf("  \033[1mRepository:\033[0m %s\n", pkg.Location)
+			if pkg.UploadTimeUnix == pkg.InstalledTimeUnix {
+				fmt.Printf("  \033[1mInstalled timestamp:\033[0m %s\n", time.Unix(pkg.InstalledTimeUnix, 0).UTC().Local().Format("01-02-2006 15:04 Monday"))
+			} else {
+				fmt.Printf("  \033[1mUpload time (UTC) :\033[0m %s\n", time.Unix(pkg.InstalledTimeUnix, 0).UTC().Format("01-02-2006 15:04 Monday"))
+				fmt.Printf("  \033[1mInstalled timestamp:\033[0m %s\n", time.Unix(pkg.InstalledTimeUnix, 0).UTC().Local().Format("01-02-2006 15:04 Monday"))
+			}
+			fmt.Printf("  \033[1mSerial:\033[0m %d\n", pkg.Serial)
+			fmt.Print("\n")
+		}
+	},
+}
+
+var installCmd = &cobra.Command{
+	Use:   "install {package name or id} ...",
+	Short: "Installs a package",
+	Long:  "Installs a package searching it in all repositories setted",
+	Args:  cobra.MinimumNArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		GrantPrivilegies()
+		return GetConfiguration()
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		sourceDB, err := sql.Open("sqlite3", SourceDB)
+		if err != nil {
+			panic(err)
+		}
+		defer sourceDB.Close()
+
+		internalDB, err := sql.Open("sqlite3", InternalDB)
+		if err != nil {
+			panic(err)
+		}
+		defer internalDB.Close()
+
+		depsMap := make(map[string]map[string]repo.DependencyStatus)
+		var info database.SDBPkg
+		var download []string
+		for _, arg := range args {
+
+			if installed, err := database.SearchIfIsInstalled(arg, internalDB); err == nil {
+				if installed {
+					fmt.Printf("=> package %s is already installed\n", arg)
+					continue
+				}
+			} else {
+				fmt.Printf("error: %s", err.Error())
+				os.Exit(1)
+			}
+
+			info, err = database.RetrievePackageInformation(arg, "", sourceDB)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			if info.Id == "" {
+				fmt.Printf("error: package %s not found\n", arg)
+				continue
+			}
+			download = append(download, PrefixForLocations+filepath.Join(strings.Split(info.Location, "/")[0], PrefixForPackages, string(info.Id)+".pkt"))
+			if err := repo.SolveDeps(packet.PackageID(info.Id), "", internalDB, sourceDB, &depsMap); err != nil {
+				panic(err)
+			}
+			for _, dep := range depsMap["build"] {
+				strings.Split(dep.Location, "/")
+				download = append(download, PrefixForLocations+filepath.Join(strings.Split(dep.Location, "/")[0], PrefixForPackages, string(info.Id)+".pkt"))
+			}
+			for _, dep := range depsMap["runtime"] {
+				strings.Split(dep.Location, "/")
+				download = append(download, PrefixForLocations+filepath.Join(strings.Split(dep.Location, "/")[0], PrefixForPackages, string(info.Id)+".pkt"))
+			}
+		}
+
+		var wg sync.WaitGroup
+		for i, url := range download {
+			wg.Go(func() {
+				fmt.Printf("[%d/%d] Downloading package\n", i+1, len(download))
+
+				pkgID := packet.PackageID(path.Base(url))
+
+				emptyReader := bytes.NewReader([]byte{})
+				data := io.NopCloser(emptyReader)
+
+				rootdir, err := filepath.Abs(filepath.Join(PackageRootDir, strings.TrimSuffix(string(pkgID), ".pkt")))
+				if err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+
+				if _, err := os.Stat(rootdir); err != nil {
+					if os.IsNotExist(err) {
+						resp, err := http.Get(url)
+						if err != nil {
+							fmt.Println(err)
+							return
+						}
+						data = resp.Body
+					}
+				} else {
+					fmt.Printf("=> Packet directory already exists checking if %s exists\n", LockFileName)
+					_, err := os.Stat(filepath.Join(rootdir, LockFileName))
+					if err != nil {
+						if os.IsNotExist(err) {
+							fmt.Printf("==> Packet directory don't have %s, the installation might be corrupted or incomplete\n", LockFileName)
+							resp, err := http.Get(url)
+							if err != nil {
+								fmt.Println(err)
+								return
+							}
+							data = resp.Body
+						}
+					} else {
+						f, err := os.ReadFile(filepath.Join(rootdir, LockFileName))
+						if err != nil {
+							fmt.Printf("error: %s", err.Error())
+							os.Exit(1)
+						}
+						lf := lockfile.ParseStatus(string(f))
+
+						if !slices.Contains(lf.Progress, lockfile.Status{Action: "download", Value: url}) {
+							resp, err := http.Get(url)
+							if err != nil {
+								fmt.Println(err)
+								return
+							}
+							data = resp.Body
+						}
+					}
+				}
+
+				sourcesdir, err := filepath.Abs(filepath.Join(rootdir, "src"))
+				if err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+				configs := &packet.Config{
+					BinDir:     Config.BinDir,
+					RootDir:    rootdir,
+					SourcesDir: sourcesdir,
+				}
+
+				db, err := sql.Open("sqlite3", InternalDB)
+				if err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+				defer db.Close()
+
+				database.PrepareDataBase(db)
+
+				if installed, err := database.SearchIfIsInstalled(pkgID.Name(), db); err == nil {
+					if installed {
+						fmt.Printf("=> package %s is already installed\n", pkgID.Name())
+						return
+					}
+				} else {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+
+				// backupDir, err := filepath.Abs(".")
+				_ = ChangeToNoPermission()
+				_ = os.MkdirAll(configs.RootDir, 0755)
+
+				if err := decompress.Decompress(data, configs.RootDir, string(pkgID)); err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+				lockFile, err := os.OpenFile(filepath.Join(rootdir, LockFileName), os.O_CREATE|os.O_RDWR, 0644)
+				if err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+				defer lockFile.Close()
+
+				_, err = lockFile.WriteString(lockfile.NewLockfile(PacketsVersion, runtime.GOOS, runtime.GOARCH, PacketsSerial, []string{}))
+				if err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+				lockFile.WriteString("download: " + url + "\n")
+				_ = os.MkdirAll(configs.SourcesDir, 0755)
+				fileContent, err := os.ReadFile(filepath.Join(rootdir, "Packet.lua"))
+				if err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+
+				pkg, err := packet.ReadPacket(fileContent, configs)
+				if err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+
+				if err := DownloadSource(&pkg.GlobalSources, configs, lockFile); err != nil {
+					fmt.Printf("error: %s", err.Error())
+					os.Exit(1)
+				}
+
+				if pkg.Plataforms != nil {
+					if plataform, exists := pkg.Plataforms[packet.OperationalSystem(runtime.GOOS)]; exists {
+						if err := DownloadSource(&plataform.Sources, configs, lockFile); err != nil {
+							fmt.Printf("error: %s", err.Error())
+							os.Exit(1)
+						}
+					}
+				}
+			})
+
+		}
+		wg.Wait()
+
+	},
+}
+
+var syncCmd = &cobra.Command{
+	Use:   "sync {url}",
+	Short: "Sync with a remote",
+	Long:  "Synchronize with a remote",
+	Args:  cobra.MinimumNArgs(1),
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		GrantPrivilegies()
+		return GetConfiguration()
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		db, err := sql.Open("sqlite3", SourceDB)
+		if err != nil {
+			panic(err)
+		}
+		defer db.Close()
+		if err := repo.FetchPackagesToDB(args[0], db); err != nil {
+			panic(err)
+		}
 	},
 }
 
@@ -301,11 +557,13 @@ func main() {
 
 	verbosityLevel = os.Getenv("VERBOSE_LEVEL")
 
+	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(executeCmd)
 	rootCmd.AddCommand(removeCmd)
-	configCmd.Flags().Bool("raw", false, "show config names and dir in stdout")
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(flagCmd)
+	rootCmd.AddCommand(listCmd)
 
 	rootCmd.AddCommand(devCmd)
 	devCmd.AddCommand(packCmd)

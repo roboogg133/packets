@@ -1,9 +1,10 @@
-package main
+package repo
 
 import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"runtime"
 	"strings"
 
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
@@ -32,7 +33,14 @@ type PackageJsonInfo struct {
 }
 
 func FetchPackagesToDB(url string, db *sql.DB) error {
-	resp, err := http.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Packets-Plataform", runtime.GOOS)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -57,28 +65,28 @@ func FetchPackagesToDB(url string, db *sql.DB) error {
 		}
 	}()
 
-	urlNormalized := strings.Replace(url, "https://", "", 1)
-	urlNormalized = strings.Replace(url, "http://", "", 1)
+	urlNormalized := strings.TrimPrefix(url, "https://")
+	urlNormalized = strings.TrimPrefix(urlNormalized, "http://")
 
 	for _, info := range data {
-		if _, err := db.Exec("INSERT OR REPLACE INTO packages (name, version, serial, maintainer, verified, description, upload_time, available_compiled, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", info.Name, info.Version, info.Serial, info.Maintainer, info.Verified, info.Description, info.UploadTime, info.AvailableCompiled, urlNormalized); err != nil {
+		if _, err := db.Exec("INSERT OR REPLACE INTO packages (name, version, serial, maintainer, verified, description, upload_time, available_compiled, location, id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", info.Name, info.Version, info.Serial, info.Maintainer, info.Verified, info.Description, info.UploadTime, info.AvailableCompiled, urlNormalized, info.Id); err != nil {
 			return err
 		}
 
 		for _, dep := range info.RuntimeDeps {
-			if _, err := db.Exec("INSERT OR REPLACE INTO dependencies (package_id, name, constraint, location) VALUES (?, ?, ?, ?)", info.Id, dep.Name, dep.Constraint, urlNormalized); err != nil {
+			if _, err := db.Exec("INSERT OR REPLACE INTO dependencies (package_id, dependency_name, version_constraint, location) VALUES (?, ?, ?, ?)", info.Id, dep.Name, dep.Constraint, urlNormalized); err != nil {
 				panic(err)
 			}
 		}
 
 		for _, dep := range info.BuildDeps {
-			if _, err := db.Exec("INSERT INTO dependencies (package_id, name, constraint, location) VALUES (?, ?, ?, ?)", info.Id, dep.Name, dep.Constraint, urlNormalized); err != nil {
+			if _, err := db.Exec("INSERT OR REPLACE INTO dependencies (package_id, dependency_name, version_constraint, location) VALUES (?, ?, ?, ?)", info.Id, dep.Name, dep.Constraint, urlNormalized); err != nil {
 				panic(err)
 			}
 		}
 
 		for _, dep := range info.Conflicts {
-			if _, err := db.Exec("INSERT INTO dependencies (package_id, name, constraint, location) VALUES (?, ?, ?, ?)", info.Id, dep.Name, dep.Constraint, urlNormalized); err != nil {
+			if _, err := db.Exec("INSERT OR REPLACE INTO dependencies (package_id, dependency_name, version_constraint, location) VALUES (?, ?, ?, ?)", info.Id, dep.Name, dep.Constraint, urlNormalized); err != nil {
 				panic(err)
 			}
 		}

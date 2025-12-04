@@ -3,18 +3,32 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/go-git/go-git/v6"
 	"github.com/roboogg133/packets/cmd/packets/decompress"
+	"github.com/roboogg133/packets/cmd/packets/lockfile"
 	"github.com/roboogg133/packets/pkg/packet.lua.d"
 )
 
-func DownloadSource(sources *[]packet.Source, configs *packet.Config) error {
+func DownloadSource(sources *[]packet.Source, configs *packet.Config, lockFile *os.File) error {
 	for _, source := range *sources {
+		if lockFile != nil {
+			b, err := io.ReadAll(lockFile)
+			if err != nil {
+				return fmt.Errorf("error: %s", err.Error())
+			}
+			lf := lockfile.ParseStatus(string(b))
+			if slices.Contains(lf.Progress, lockfile.Status{Action: "download", Value: source.Url}) {
+				fmt.Printf("===> Skipping download %s\n", path.Base(source.Url))
+				continue
+			}
+		}
 		downloaded, err := packet.GetSource(source.Url, source.Method, source.Specs, NumberOfTryAttempts)
 		if err != nil {
 			return fmt.Errorf("error: %s", err.Error())
@@ -38,7 +52,10 @@ func DownloadSource(sources *[]packet.Source, configs *packet.Config) error {
 			}
 			os.RemoveAll(filepath.Join(configs.SourcesDir, repoName, ".git"))
 		}
-
+		fmt.Printf("===> Download: %s\n", path.Base(source.Url))
+		if lockFile != nil {
+			lockFile.WriteString("download: " + source.Url + "\n")
+		}
 	}
 	return nil
 }

@@ -1,0 +1,30 @@
+PACKETS VERSION 1.0.0 = SERIAL 0
+Target Plataform: linux
+Target Architecture: amd64
+FLAGS: [ systemd ]
+
+download: https://nginx.org/download/nginx-1.29.3.tar.gz
+build: SUCCESS
+install: /etc/systemd/system/nginx.service
+install: /usr/bin/nginx
+install: /usr/local/nginx
+install: /etc/nginx
+install: /etc/nginx/koi-win
+install: /etc/nginx/koi-utf
+install: /etc/nginx/win-utf
+install: /etc/nginx/mime.types
+install: /etc/nginx/mime.types.default
+install: /etc/nginx/fastcgi_params
+install: /etc/nginx/fastcgi_params.default
+install: /etc/nginx/fastcgi.conf
+install: /etc/nginx/fastcgi.conf.default
+install: /etc/nginx/uwsgi_params
+install: /etc/nginx/uwsgi_params.default
+install: /etc/nginx/scgi_params
+install: /etc/nginx/scgi_params.default
+install: /etc/nginx/nginx.conf
+install: /etc/nginx/nginx.conf.default
+install: /usr/share/nginx/html
+install: /usr/share/licenses/nginx/LICENSE
+install: /usr/share/man/man8/nginx.8
+install: /etc/nginx/logs
