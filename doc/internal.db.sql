@@ -1,4 +1,4 @@
-CREATE TABLE installed_packges(
+CREATE TABLE installed_packages(
     name TEXT NOT NULL UNIQUE,
     id TEXT PRIMARY KEY,
     version TEXT NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE installed_packges(
 
     UNIQUE(name, version),
     UNIQUE(name, serial)
-)
+);
 
 CREATE TABLE package_files(
     package_id TEXT PRIMARY KEY,
@@ -23,40 +23,40 @@ CREATE TABLE package_files(
     is_dir INTEGER NOT NULL DEFAULT 0,
 
     UNIQUE(package_id, filepath)
-)
+);
 
 CREATE TABLE dependencies(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
-    constraint TEXT NOT NULL,
+    version_constraint TEXT NOT NULL,
 
     PRIMARY KEY (package_id, dependency_name)
-)
+);
 
 
 CREATE TABLE build_dependencies(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
-    constraint TEXT NOT NULL,
+    version_constraint TEXT NOT NULL,
 
     PRIMARY KEY (package_id, dependency_name)
-)
+);
 
 
 CREATE TABLE conflicts(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
-    constraint TEXT NOT NULL,
+    version_constraint TEXT NOT NULL,
 
     PRIMARY KEY (package_id, dependency_name)
-)
+);
 
 CREATE TABLE package_flags(
     package_id TEXT NOT NULL,
     flag TEXT NOT NULL,
     name TEXT NOT NULL,
-    path TEXT NOT NULL,
-)
+    path TEXT NOT NULL
+);
 
 CREATE TABLE build_packages(
     name TEXT NOT NULL,
@@ -76,4 +76,4 @@ CREATE TABLE build_packages(
     UNIQUE(name, signature),
     UNIQUE(name, version),
     UNIQUE(name, serial)
-)
+);

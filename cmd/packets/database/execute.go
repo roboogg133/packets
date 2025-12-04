@@ -10,50 +10,56 @@ import (
 )
 
 const (
-	CreateInstructions = `
-CREATE TABLE IF NOT EXISTS installed_packages(
-    name TEXT NOT NULL,
+	CreateInstructions = `CREATE TABLE IF NOT EXISTS installed_packages(
+    name TEXT NOT NULL UNIQUE,
     id TEXT PRIMARY KEY,
     version TEXT NOT NULL,
     serial INTEGER NOT NULL,
     maintainer TEXT NOT NULL,
     verified INTEGER NOT NULL DEFAULT 0,
     description TEXT NOT NULL,
-    upload_time TEXT NOT NULL,
+    upload_time INTEGER NOT NULL,
     installed_time INTEGER NOT NULL,
-    image BLOB,
 
-    available_compiled INTEGER NOT NULL DEFAULT 0,
+    location TEXT NOT NULL,
+
+    image BLOB,
 
     UNIQUE(name, version),
     UNIQUE(name, serial)
 );
 
 CREATE TABLE IF NOT EXISTS package_files(
-    package_id TEXT NOT NULL,
-    path TEXT NOT NULL,
+    package_id TEXT PRIMARY KEY,
+    filepath TEXT NOT NULL,
     is_dir INTEGER NOT NULL DEFAULT 0,
-    UNIQUE(package_id, path)
+
+    UNIQUE(package_id, filepath)
 );
 
 CREATE TABLE IF NOT EXISTS dependencies(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
     version_constraint TEXT NOT NULL,
+
     PRIMARY KEY (package_id, dependency_name)
 );
+
 
 CREATE TABLE IF NOT EXISTS build_dependencies(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
     version_constraint TEXT NOT NULL,
+
     PRIMARY KEY (package_id, dependency_name)
 );
+
 
 CREATE TABLE IF NOT EXISTS conflicts(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
     version_constraint TEXT NOT NULL,
+
     PRIMARY KEY (package_id, dependency_name)
 );
 
@@ -62,6 +68,25 @@ CREATE TABLE IF NOT EXISTS package_flags(
     flag TEXT NOT NULL,
     name TEXT NOT NULL,
     path TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS build_packages(
+    name TEXT NOT NULL,
+    id TEXT PRIMARY KEY,
+    version TEXT NOT NULL,
+    serial INTEGER NOT NULL,
+    maintainer TEXT NOT NULL,
+    verified INTEGER NOT NULL DEFAULT 0,
+    description TEXT NOT NULL,
+    upload_time INTEGER NOT NULL,
+    installed_time INTEGER NOT NULL,
+
+    location TEXT NOT NULL,
+
+    filepath TEXT NOT NULL,
+
+    UNIQUE(name, version),
+    UNIQUE(name, serial)
 );
 `
 )

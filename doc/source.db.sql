@@ -1,6 +1,6 @@
 CREATE TABLE packages(
     name TEXT NOT NULL,
-    id TEXT,
+    id TEXT NOT NULL,
     version TEXT NOT NULL,
     serial INTEGER NOT NULL,
     maintainer TEXT NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE packages(
 CREATE TABLE dependencies(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
-    constraint TEXT NOT NULL,
+    version_constraint TEXT NOT NULL,
     location TEXT NOT NULL,
 
     PRIMARY KEY (package_id, dependency_name, location)
@@ -28,7 +28,7 @@ CREATE TABLE dependencies(
 CREATE TABLE build_dependencies(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
-    constraint TEXT NOT NULL,
+    version_constraint TEXT NOT NULL,
     location TEXT NOT NULL,
 
     PRIMARY KEY (package_id, dependency_name, location)
@@ -37,7 +37,7 @@ CREATE TABLE build_dependencies(
 CREATE TABLE conflicts(
     package_id TEXT NOT NULL,
     dependency_name TEXT NOT NULL,
-    constraint TEXT NOT NULL,
+    version_constraint TEXT NOT NULL,
     location TEXT NOT NULL,
 
     PRIMARY KEY (package_id, dependency_name, location)
