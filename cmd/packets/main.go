@@ -376,13 +376,13 @@ var installCmd = &cobra.Command{
 				fmt.Printf("error: package %s not found\n", arg)
 				continue
 			}
-			download = append(download, PrefixForLocations+filepath.Join(strings.Split(info.Location, "/")[0], PrefixForPackages, string(info.Id)+".pkt"))
+			download = append(download, PrefixForLocations+path.Join(strings.Split(info.Location, "/")[0], PrefixForPackages, string(info.Id)+".pkt"))
 			if err := repo.SolveDeps(packet.PackageID(info.Id), "", internalDB, sourceDB, &depsMap); err != nil {
 				panic(err)
 			}
 			for _, dep := range depsMap["build"] {
 				strings.Split(dep.Location, "/")
-				download = append(download, PrefixForLocations+filepath.Join(strings.Split(dep.Location, "/")[0], PrefixForPackages, string(info.Id)+".pkt"))
+				download = append(download, PrefixForLocations+path.Join(strings.Split(dep.Location, "/")[0], PrefixForPackages, string(info.Id)+".pkt"))
 			}
 			for _, dep := range depsMap["runtime"] {
 				strings.Split(dep.Location, "/")
