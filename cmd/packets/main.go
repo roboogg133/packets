@@ -492,16 +492,51 @@ var installCmd = &cobra.Command{
 				}
 				defer lockFile.Close()
 
-				_, err = lockFile.WriteString(lockfile.NewLockfile(PacketsVersion, runtime.GOOS, runtime.GOARCH, PacketsSerial, []string{}))
+
+			
+				lockContent, err :=  io.ReadAll(lockFile)
 				if err != nil {
-					fmt.Printf("error: %s", err.Error())
-					os.Exit(1)
+					panic(err)
 				}
-				lockFile.WriteString("download: " + url + "\n")
+
+				lf := lockfile.ParseStatus(string(lockContent))
+				
+				
+				
+
+				if len(lockContent) == 0 {	
+						_, err = lockFile.WriteString(lockfile.NewLockfile(PacketsVersion, runtime.GOOS, runtime.GOARCH, PacketsSerial, []string{}))
+					if err != nil {
+						fmt.Printf("error: %s", err.Error())
+						os.Exit(1)
+					}
+					lockFile.Seek(0, io.SeekStart)
+					lockContent, err = io.ReadAll(lockFile)
+					if err != nil {
+						panic(err)
+					}
+					lf = lockfile.ParseStatus(string(lockContent))
+					
+
+				}
+				if !slices.Contains(lf.Progress, lockfile.Status{Action: "download", Value: url}) {
+					lockFile.WriteString("download: " + url + "\n")
+				}
+				
+				if lf.TargetOS != runtime.GOOS {
+					fmt.Println("==> FATAL: mismatched package target plataform")
+					return 
+				}
+				if lf.TargetArch != runtime.GOARCH {
+					fmt.Println("==> FATAL: architeture")
+
+				}
+
+				
 				_ = os.MkdirAll(configs.SourcesDir, 0755)
+
 				fileContent, err := os.ReadFile(filepath.Join(rootdir, "Packet.lua"))
-				if err != nil {
-					fmt.Printf("error: %s", err.Error())
+				if err != nil { fmt.Printf("error: %s", err.Error())
 					os.Exit(1)
 				}
 
@@ -511,6 +546,7 @@ var installCmd = &cobra.Command{
 					os.Exit(1)
 				}
 
+				lockFile.Seek(0, io.SeekStart)
 				if err := DownloadSource(&pkg.GlobalSources, configs, lockFile); err != nil {
 					fmt.Printf("error: %s", err.Error())
 					os.Exit(1)
@@ -524,6 +560,20 @@ var installCmd = &cobra.Command{
 						}
 					}
 				}
+				lockFile.Seek(0, io.SeekStart)
+				lockContent, err = io.ReadAll(lockFile)
+				if err != nil {
+					panic(err)
+				}
+				lf = lockfile.ParseStatus(string(lockContent))
+
+				if slices.Contains(lf.Progress, lockfile.Status{Value: "OK", Action: "build"}) {
+					fmt.Println("==> Package alredy builded")
+				} else {
+					pkg.ExecuteBuild(configs)
+					lockFile.WriteString("build: OK\n")
+				}
+
 			})
 
 		}
