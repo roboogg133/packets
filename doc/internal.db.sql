@@ -73,7 +73,6 @@ CREATE TABLE build_packages(
 
     filepath TEXT NOT NULL,
 
-    UNIQUE(name, signature),
     UNIQUE(name, version),
     UNIQUE(name, serial)
 );
